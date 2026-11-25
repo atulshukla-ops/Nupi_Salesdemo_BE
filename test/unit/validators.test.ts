@@ -52,8 +52,19 @@ describe("validators", () => {
   it("uploads accept only supported video types and sizes", () => {
     const base = { productId: id(1), fileName: "a.mp4", sizeBytes: 1000, mimeType: "video/mp4" };
     expect(ok(startUploadSchema, base)).toBe(true);
-    expect(msg(startUploadSchema, { ...base, mimeType: "video/avi" })).toBe("Only MP4, MOV, WebM or M4V videos can be uploaded");
+    expect(msg(startUploadSchema, { ...base, mimeType: "video/avi" })).toBe("Only videos (MP4, MOV, WebM, M4V) or decks (PPTX, PPT, PDF) can be uploaded");
     expect(msg(startUploadSchema, { ...base, sizeBytes: 3 * 1024 ** 3 })).toMatch(/too large/);
+  });
+
+  it("decks: PPTX, PPT and PDF are accepted, up to 200 MB", () => {
+    const pptx = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+    const base = { productId: id(1), fileName: "deck.pptx", sizeBytes: 5_000_000, mimeType: pptx };
+    expect(ok(startUploadSchema, base)).toBe(true);
+    expect(ok(startUploadSchema, { ...base, fileName: "deck.pdf", mimeType: "application/pdf" })).toBe(true);
+    expect(ok(startUploadSchema, { ...base, fileName: "deck.ppt", mimeType: "application/vnd.ms-powerpoint" })).toBe(true);
+    expect(msg(startUploadSchema, { ...base, sizeBytes: 250 * 1024 ** 2 })).toBe("Deck is too large. The limit is 200 MB");
+    // a 250 MB video is still fine
+    expect(ok(startUploadSchema, { ...base, fileName: "a.mp4", mimeType: "video/mp4", sizeBytes: 250 * 1024 ** 2 })).toBe(true);
   });
 
   it("completing an upload refuses duplicate part numbers", () => {

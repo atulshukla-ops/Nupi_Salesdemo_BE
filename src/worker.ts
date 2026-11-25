@@ -8,7 +8,7 @@ import { PermanentVideoError } from "./utils/ffmpeg";
 import logger from "./utils/logger";
 
 /**
- * Background worker: video processing + nightly maintenance.
+ * Background worker: video and deck processing + nightly maintenance.
  * Runs as its own process (npm run dev:worker / npm run start:worker) so a long ffmpeg job
  * never slows down the API.
  */
@@ -26,11 +26,11 @@ const handleVideoJob = async (job: VideoJob) => {
       return;
     }
     if (job.retryCount >= job.retryLimit) {
-      await markProcessingFailed(assetId, version, "The video could not be processed. Please upload it again.");
-      logger.error(`Video ${assetId} v${version} failed after ${job.retryCount + 1} attempts: ${message}`);
+      await markProcessingFailed(assetId, version, "This file could not be processed. Please upload it again.");
+      logger.error(`File ${assetId} v${version} failed after ${job.retryCount + 1} attempts: ${message}`);
       return;
     }
-    logger.warn(`Video ${assetId} v${version} attempt ${job.retryCount + 1} failed, will retry: ${message}`);
+    logger.warn(`File ${assetId} v${version} attempt ${job.retryCount + 1} failed, will retry: ${message}`);
     throw error; // pg-boss retries with backoff
   }
 };

@@ -22,5 +22,15 @@ export const assetKeys = (assetId: string, version: number, ext: string) => {
 
 export const assetPrefix = (assetId: string) => `${env.storagePrefix}/videos/${assetId}/`;
 
+/** Decks live in the same asset folder as videos: v<n>/slides/001.jpg …, v<n>/thumb.jpg. */
+export const deckKeys = (assetId: string, version: number) => {
+  const base = `${env.storagePrefix}/videos/${assetId}/v${version}`;
+  return {
+    slidesPrefix: `${base}/slides/`,
+    slide: (n: number) => `${base}/slides/${String(n).padStart(3, "0")}.jpg`,
+    thumbnail: `${base}/thumb.jpg`
+  };
+};
+
 /** One version's folder. The trailing slash matters on S3: "v1" alone would also match v10, v11, ... */
 export const versionPrefix = (assetId: string, version: number) => `${assetPrefix(assetId)}v${version}/`;

@@ -6,7 +6,7 @@ import { enqueueVideoProcessing } from "../jobs/boss";
 import { assetKeys, assetPrefix, storage } from "../storage";
 import AppError from "../utils/appError";
 import logger from "../utils/logger";
-import { VIDEO_TYPES } from "../validators/upload.validator";
+import { FILE_TYPES, kindForMime } from "../validators/upload.validator";
 import { assetToJSON, findLiveAsset, nextAssetSortOrder } from "./asset.service";
 import { assetWithUrls } from "./playback.service";
 import { findActiveProduct } from "./product.service";
@@ -22,7 +22,7 @@ interface FileInfo {
 
 const extensionFor = ({ fileName, mimeType }: FileInfo) => {
   const ext = path.extname(fileName).slice(1).toLowerCase();
-  const allowed = VIDEO_TYPES[mimeType];
+  const allowed = FILE_TYPES[mimeType];
   return allowed.includes(ext) ? ext : allowed[0];
 };
 
@@ -80,7 +80,7 @@ export const startUpload = async (
   await findActiveProduct(input.productId);
   const asset = await Asset.create({
     productId: input.productId,
-    kind: "video",
+    kind: kindForMime(input.mimeType),
     title: input.title || titleFromFileName(input.fileName),
     description: input.description,
     notes: input.notes,
@@ -104,6 +104,9 @@ export const startUpload = async (
  */
 export const startReplaceUpload = async (assetId: string, file: FileInfo, by: string | null) => {
   const asset = await findLiveAsset(assetId);
+  if (kindForMime(file.mimeType) !== asset.kind) {
+    throw new AppError(422, asset.kind === "deck" ? "This is a deck: replace it with a PPTX, PPT or PDF file" : "This is a video: replace it with a video file");
+  }
   const previous = asset.pendingUpload;
   if (previous?.state === "processing") {
     throw new AppError(409, "The previous file is still being processed. Try again when it is ready.");

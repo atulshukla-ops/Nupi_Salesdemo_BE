@@ -20,6 +20,7 @@ export const assetToJSON = (a: Asset) => ({
   playable: a.status === "ready" && a.version > 0,
   version: a.version,
   durationSec: a.durationSec,
+  slideCount: a.slideCount,
   width: a.width,
   height: a.height,
   sizeBytes: a.sizeBytes,

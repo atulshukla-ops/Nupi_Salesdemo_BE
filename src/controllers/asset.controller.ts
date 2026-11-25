@@ -8,7 +8,7 @@ import {
   restoreAsset,
   updateAsset
 } from "../services/asset.service";
-import { assetsWithUrls, assetWithUrls, getPlaybackUrl } from "../services/playback.service";
+import { assetsWithUrls, assetWithUrls, getPlaybackUrl, getSlides } from "../services/playback.service";
 import asyncHandler from "../utils/asyncHandler";
 import { presenterName } from "../utils/presenter";
 import { successCallback } from "../utils/successResponse";
@@ -51,4 +51,8 @@ export const restoreAssetHandler = asyncHandler(async (req: Request, res: Respon
 export const reorderAssetsHandler = asyncHandler(async (req: Request, res: Response) => {
   const assets = await reorderAssets(req.body.productId, req.body.ids, presenterName(req));
   successCallback(res, "success", "AssetReorder", "Order saved", await assetsWithUrls(assets));
+});
+
+export const slidesHandler = asyncHandler(async (req: Request, res: Response) => {
+  successCallback(res, "success", "AssetSlides", "Slides ready", await getSlides(req.params.id));
 });

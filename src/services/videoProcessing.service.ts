@@ -5,10 +5,11 @@ import { Asset } from "../entities/asset.entity";
 import { assetKeys, storage, versionPrefix } from "../storage";
 import { canRemux, extractThumbnail, PermanentVideoError, probe, remuxFastStart, transcodeToMp4 } from "../utils/ffmpeg";
 import logger from "../utils/logger";
+import { processDeck } from "./deckProcessing.service";
 
 const MAX_DURATION_SEC = 3 * 60 * 60;
 
-/** Marks the upload as failed. A brand-new video becomes "failed"; a replacement leaves the old file playing. */
+/** Marks the upload as failed. A brand-new video/deck becomes "failed"; a replacement leaves the old file in use. */
 export const markProcessingFailed = async (assetId: string, version: number, reason: string) => {
   const asset = await Asset.findOneBy({ id: assetId });
   const pending = asset?.pendingUpload;
@@ -19,7 +20,7 @@ export const markProcessingFailed = async (assetId: string, version: number, rea
     asset.failureReason = reason;
   }
   await asset.save();
-  logger.warn(`Video ${assetId} v${version} failed: ${reason}`);
+  logger.warn(`${asset.kind === "deck" ? "Deck" : "Video"} ${assetId} v${version} failed: ${reason}`);
 };
 
 /**
@@ -38,6 +39,8 @@ export const processVideo = async (assetId: string, version: number) => {
     logger.info(`Skipping video job ${assetId} v${version}: nothing to process`);
     return { skipped: true };
   }
+
+  if (asset.kind === "deck") return processDeck(asset, pending, version);
 
   const keys = assetKeys(asset.id, version, path.extname(pending.objectKey).slice(1));
   const work = await fs.mkdtemp(path.join(os.tmpdir(), "sdr-video-"));

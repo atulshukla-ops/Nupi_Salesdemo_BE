@@ -62,6 +62,10 @@ export class Asset extends BaseEntity {
   @Column({ name: "Height", type: "integer", nullable: true })
   height: number | null;
 
+  /** Decks only: number of slides. */
+  @Column({ name: "SlideCount", type: "integer", nullable: true })
+  slideCount: number | null;
+
   @Column({ name: "PendingUpload", type: "jsonb", nullable: true })
   pendingUpload: PendingUpload | null;
 

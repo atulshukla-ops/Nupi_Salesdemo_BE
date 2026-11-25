@@ -5,6 +5,7 @@ import {
   getAssetHandler,
   listAssetsHandler,
   playbackUrlHandler,
+  slidesHandler,
   reorderAssetsHandler,
   restoreAssetHandler,
   updateAssetHandler
@@ -23,6 +24,7 @@ router.post("/reorder", validate(reorderAssetsSchema), reorderAssetsHandler);
 router.get("/:id", validateParams(idParamsSchema), getAssetHandler);
 router.get("/:id/usage", validateParams(idParamsSchema), assetUsageHandler);
 router.get("/:id/playback-url", validateParams(idParamsSchema), playbackUrlHandler);
+router.get("/:id/slides", validateParams(idParamsSchema), slidesHandler);
 router.patch("/:id", validateParams(idParamsSchema), validate(updateAssetSchema), updateAssetHandler);
 router.delete("/:id", validateParams(idParamsSchema), deleteAssetHandler);
 router.post("/:id/restore", validateParams(idParamsSchema), restoreAssetHandler);
