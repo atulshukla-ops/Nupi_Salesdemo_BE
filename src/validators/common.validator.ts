@@ -23,3 +23,9 @@ export const hexColor = () =>
 
 /** Full new order of a list: every id exactly once. */
 export const orderedIds = () => Joi.array().items(uuid()).unique().min(1).max(500);
+
+/** DELETE /trash/:kind/:id */
+export const trashParamsSchema = Joi.object({
+  kind: Joi.string().valid("assets", "demos", "flows", "products").required().messages({ "any.only": "kind must be assets, demos, flows or products" }),
+  id: uuid().required().messages({ "string.guid": "id must be a valid id" })
+});

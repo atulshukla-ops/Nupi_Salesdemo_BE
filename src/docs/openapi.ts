@@ -31,12 +31,21 @@ type Op = {
   query?: Joi.ObjectSchema;
   open?: boolean; // no team key
   notes?: string;
+  pathEnums?: Record<string, string[]>;
 };
 
 const ops: Op[] = [
   // library
   { method: "get", path: "/bootstrap", tag: "Library", summary: "Everything the presenter app needs at start: settings, products, assets (with thumbnail URLs), flows" },
-  { method: "get", path: "/trash", tag: "Library", summary: "Deleted assets, demos and flows, with the date each is purged" },
+  { method: "get", path: "/trash", tag: "Library", summary: "Deleted videos, demos and flows (with the date each is purged) and deleted tabs (with their video count)" },
+  {
+    method: "delete",
+    path: "/trash/{kind}/{id}",
+    tag: "Library",
+    summary: "Delete a Trash item for good, files included. A deleted tab goes with all its videos.",
+    notes: "Only works on items already in the Trash (404 otherwise).",
+    pathEnums: { kind: ["assets", "demos", "flows", "products"] }
+  },
   { method: "get", path: "/settings", tag: "Library", summary: "Company About text and the three highlights" },
   { method: "put", path: "/settings", tag: "Library", summary: "Replace the About text and highlights", body: updateSettingsSchema },
 
@@ -117,8 +126,12 @@ const err = (description: string) => ({ description, content: { "application/jso
 const paths: Record<string, Record<string, unknown>> = {};
 for (const op of ops) {
   const parameters: unknown[] = [];
-  const pathParam = op.path.match(/\{(\w+)\}/)?.[1];
-  if (pathParam) parameters.push({ name: pathParam, in: "path", required: true, schema: { type: "string", ...(pathParam === "id" ? { format: "uuid" } : {}) } });
+  const pathParams = [...op.path.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
+  for (const name of pathParams) {
+    const enumValues = op.pathEnums?.[name];
+    parameters.push({ name, in: "path", required: true, schema: { type: "string", ...(name === "id" ? { format: "uuid" } : {}), ...(enumValues ? { enum: enumValues } : {}) } });
+  }
+  const pathParam = pathParams.length > 0;
   if (op.query) parameters.push(...joiToParameters(op.query, "query"));
 
   const responses: Record<string, unknown> = {

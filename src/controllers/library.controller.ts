@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { getBootstrap, getTrash } from "../services/library.service";
 import { getSettings, updateSettings } from "../services/settings.service";
+import { purgeTrashItem, TrashKind } from "../services/trash.service";
 import asyncHandler from "../utils/asyncHandler";
 import { presenterName } from "../utils/presenter";
 import { successCallback } from "../utils/successResponse";
@@ -19,4 +20,9 @@ export const getSettingsHandler = asyncHandler(async (_req: Request, res: Respon
 
 export const updateSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
   successCallback(res, "success", "SettingsUpdate", "Settings saved", await updateSettings(req.body, presenterName(req)));
+});
+
+export const purgeTrashHandler = asyncHandler(async (req: Request, res: Response) => {
+  const result = await purgeTrashItem(req.params.kind as TrashKind, req.params.id);
+  successCallback(res, "success", "TrashPurge", "Deleted for good", result);
 });
