@@ -62,14 +62,15 @@ const ops: Op[] = [
   { method: "post", path: "/assets/reorder", tag: "Assets", summary: "Set the order of a product's assets", body: reorderAssetsSchema },
   { method: "get", path: "/assets/{id}", tag: "Assets", summary: "One asset (status uploading | processing | ready | failed)" },
   { method: "get", path: "/assets/{id}/usage", tag: "Assets", summary: "Demos and flows that use this asset" },
-  { method: "get", path: "/assets/{id}/playback-url", tag: "Assets", summary: "Short-lived signed URL to play the video (409 while not ready)" },
+  { method: "get", path: "/assets/{id}/playback-url", tag: "Assets", summary: "Short-lived signed URL to play the video (409 while not ready, or for a deck)" },
+  { method: "get", path: "/assets/{id}/slides", tag: "Assets", summary: "Decks: signed URLs of every slide image, in order (409 while converting, or for a video)" },
   { method: "patch", path: "/assets/{id}", tag: "Assets", summary: "Edit title, description, notes or move to another product", body: updateAssetSchema },
   { method: "delete", path: "/assets/{id}", tag: "Assets", summary: "Move to Trash (returns where it was used)" },
   { method: "post", path: "/assets/{id}/restore", tag: "Assets", summary: "Restore from Trash" },
   { method: "post", path: "/assets/{id}/replace-upload", tag: "Uploads", summary: "Start uploading a new version of the video; the old one keeps playing until the new one is ready", body: replaceUploadSchema },
 
   // uploads
-  { method: "post", path: "/uploads", tag: "Uploads", summary: "Start a video upload: creates the asset and returns upload id, part size and part count", body: startUploadSchema },
+  { method: "post", path: "/uploads", tag: "Uploads", summary: "Start an upload (video: MP4/MOV/WebM/M4V up to 2 GB; deck: PPTX/PPT/PDF up to 200 MB). Creates the asset and returns upload id, part size and part count", body: startUploadSchema },
   { method: "post", path: "/uploads/{id}/part-urls", tag: "Uploads", summary: "Signed URLs to PUT each part directly to storage (max 100 per call)", body: partUrlsSchema },
   { method: "get", path: "/uploads/{id}/parts", tag: "Uploads", summary: "Parts already uploaded and the ones missing (resume after a network drop)" },
   { method: "post", path: "/uploads/{id}/complete", tag: "Uploads", summary: "Finish the upload (all parts with their ETag); the video is then processed by the worker", body: completeUploadSchema },

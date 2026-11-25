@@ -21,7 +21,7 @@ Conventions follow `be-admin-portal`: Express + TypeScript, route → controller
 
 ## Run locally
 
-Requires Node.js 20+ and a PostgreSQL server (the local one is fine). ffmpeg comes with `npm install`.
+Requires Node.js 22.13+ and a PostgreSQL server (the local one is fine). ffmpeg comes with `npm install`. PowerPoint decks need LibreOffice installed; PDF decks don't.
 
 ```bash
 npm install

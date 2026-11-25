@@ -60,6 +60,8 @@ export default {
 
   // uploads & playback
   maxUploadBytes: num(process.env.MAX_UPLOAD_BYTES, 2 * 1024 * 1024 * 1024),
+  /** Decks (PPTX/PPT/PDF) are much smaller than videos. */
+  maxDeckBytes: num(process.env.MAX_DECK_BYTES, 200 * 1024 * 1024),
   uploadPartBytes: num(process.env.UPLOAD_PART_BYTES, 16 * 1024 * 1024),
   playbackUrlTtlSec: num(process.env.PLAYBACK_URL_TTL_SEC, 4 * 60 * 60),
 

@@ -17,7 +17,9 @@ export const getBootstrap = async () => {
     settings,
     products: products.map(productToJSON),
     assets: await assetsWithUrls(assets),
-    flows: flows.map(flowToJSON)
+    flows: flows.map(flowToJSON),
+    /** Upload limits, so the browser checks the same numbers as the server. */
+    limits: { videoBytes: env.maxUploadBytes, deckBytes: env.maxDeckBytes }
   };
 };
 
