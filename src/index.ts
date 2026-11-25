@@ -13,6 +13,17 @@ const checkConfig = () => {
   if (env.teamKey.length < 16) problems.push("TEAM_KEY must be set (at least 16 characters)");
   if (env.hostTokenSecret.length < 32) problems.push("HOST_TOKEN_SECRET must be set (at least 32 characters)");
   if (!env.dbName || !env.dbUserName) problems.push("DB_NAME and DB_USERNAME must be set");
+  if (env.storageDriver !== "local" && env.storageDriver !== "s3") problems.push('STORAGE_DRIVER must be "local" or "s3"');
+  if (env.storageDriver === "s3" && !env.s3Bucket) problems.push("S3_BUCKET must be set when STORAGE_DRIVER=s3");
+  if (env.storageDriver === "s3" && !env.storagePrefix) problems.push("STORAGE_PREFIX must be set (the bucket is shared)");
+  const cf = [env.cloudfrontDomain, env.cloudfrontKeyPairId, env.cloudfrontPrivateKey].filter(Boolean).length;
+  if (cf > 0 && cf < 3) problems.push("CLOUDFRONT_DOMAIN, CLOUDFRONT_KEY_PAIR_ID and CLOUDFRONT_PRIVATE_KEY must be set together");
+  if (env.cloudfrontDomain && !/^(https?:\/\/)?[a-z0-9.-]+\/?$/i.test(env.cloudfrontDomain)) {
+    problems.push("CLOUDFRONT_DOMAIN must be just the host name, e.g. dxxxx.cloudfront.net (no path)");
+  }
+  if (env.storageDriver === "s3" && cf === 0) {
+    logger.warn("Playback uses S3 presigned links (no CloudFront). With an IAM role these last at most until its credentials rotate; set CLOUDFRONT_* for production.");
+  }
   if (!env.corsOrigins.length) logger.warn("CORS_ORIGINS is empty: browsers will not be able to call the API");
   if (problems.length) {
     problems.forEach((p) => logger.error(`Config: ${p}`));

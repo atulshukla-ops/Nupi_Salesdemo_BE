@@ -206,6 +206,6 @@ These are estimates. Please check them against the AWS Pricing Calculator for ap
 | 6 | The AWS account ID and region (`ap-south-1`) | Any channel |
 
 **After we receive these:**
-1. We set `STORAGE_DRIVER=s3` and the values above in the server's `.env`.
-2. We deploy the S3 + CloudFront driver.
+1. Set in the server's `.env`: `STORAGE_DRIVER=s3`, `S3_BUCKET=storagenupi`, `AWS_REGION=ap-south-1`, `CLOUDFRONT_DOMAIN`, `CLOUDFRONT_KEY_PAIR_ID` and `CLOUDFRONT_PRIVATE_KEY`. AWS keys are not needed when the server has the IAM role.
+2. Restart the containers. The S3 + CloudFront code is already in the app (tested against an S3 emulator), and the API refuses to start if a value is missing.
 3. We test an upload and a playback on QA together with you.

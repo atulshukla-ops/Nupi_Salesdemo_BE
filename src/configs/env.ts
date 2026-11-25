@@ -50,6 +50,13 @@ export default {
   storagePrefix: process.env.STORAGE_PREFIX || "sales-demo",
   awsRegion: process.env.AWS_REGION || "ap-south-1",
   s3Bucket: process.env.S3_BUCKET || "",
+  /** Only for S3-compatible servers (e.g. MinIO for local testing). Empty on AWS. */
+  s3Endpoint: process.env.S3_ENDPOINT || "",
+  s3ForcePathStyle: (process.env.S3_FORCE_PATH_STYLE ?? "true") === "true",
+  /** CloudFront signed URLs for playback. When empty, S3 presigned URLs are used. */
+  cloudfrontDomain: process.env.CLOUDFRONT_DOMAIN || "",
+  cloudfrontKeyPairId: process.env.CLOUDFRONT_KEY_PAIR_ID || "",
+  cloudfrontPrivateKey: process.env.CLOUDFRONT_PRIVATE_KEY || "",
 
   // uploads & playback
   maxUploadBytes: num(process.env.MAX_UPLOAD_BYTES, 2 * 1024 * 1024 * 1024),
