@@ -1,0 +1,58 @@
+# Run on a server:    docker compose up -d --build
+# Run migrations:     docker compose run --rm migrate
+# Logs:               docker compose logs -f api worker
+#
+# Both containers use the same image and the same .env file (next to this file).
+# Inside a container "localhost" is the container itself: set DB_HOST to the database server's
+# address, or to host.docker.internal when PostgreSQL runs on this same machine.
+
+x-app: &app
+  build: .
+  image: nupi-salesdemo-be:latest
+  env_file: .env
+  restart: unless-stopped
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  volumes:
+    - ${LOG_DIR:-./logs}:/app/logs
+    # Video files while STORAGE_DRIVER=local. Must be shared by api and worker.
+    # Not needed any more once STORAGE_DRIVER=s3.
+    - sdr_storage:/app/storage
+  networks:
+    - sales_demo_network
+
+services:
+  api:
+    <<: *app
+    container_name: sales_demo_api
+    command: ["node", "build/index.js"]
+    ports:
+      - "${PORT:-8130}:${PORT:-8130}"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:'+(process.env.PORT||8130)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    # Give open requests and live connections time to finish on deploy
+    stop_grace_period: 15s
+
+  worker:
+    <<: *app
+    container_name: sales_demo_worker
+    command: ["node", "build/worker.js"]
+    # A video conversion in progress is retried after a restart; allow a short finish
+    stop_grace_period: 35s
+
+  # One-off: apply database migrations (docker compose run --rm migrate)
+  migrate:
+    <<: *app
+    profiles: ["tools"]
+    restart: "no"
+    command: ["npm", "run", "migration:run:prod"]
+
+volumes:
+  sdr_storage:
+
+networks:
+  sales_demo_network:
