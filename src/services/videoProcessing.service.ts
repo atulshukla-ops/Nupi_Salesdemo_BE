@@ -25,7 +25,8 @@ export const markProcessingFailed = async (assetId: string, version: number, rea
 /**
  * Turns an uploaded original into what viewers play:
  *  1. check it really is a video (ffprobe)
- *  2. H.264/AAC MP4 → fast-start remux (seconds); anything else → convert to 1080p H.264/AAC (minutes)
+ *  2. H.264/AAC MP4 up to 1080p → fast-start remux (seconds); anything else (other codecs, bigger than
+ *     1080p) → convert to H.264/AAC at most 1080p (minutes)
  *  3. thumbnail at ~2 s
  *  4. store play.mp4 + thumb.jpg, switch the asset to this version, mark it "ready"
  */

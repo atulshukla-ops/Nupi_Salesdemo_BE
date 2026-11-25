@@ -61,12 +61,18 @@ export const probe = async (file: string): Promise<ProbeResult> => {
   };
 };
 
+/** Largest size viewers get: the shorter side is at most 1080 px (1920x1080, or 1080x1920 portrait). */
+export const MAX_SHORT_SIDE = 1080;
+
 /**
  * Browsers play H.264 (8-bit 4:2:0) + AAC in MP4 everywhere. Such files only need "fast start"
- * (index moved to the front, so playback begins before the whole file has downloaded).
+ * (index moved to the front, so playback begins before the whole file has downloaded), unless
+ * they are bigger than 1080p: those are shrunk so clients on slow connections can still follow.
  */
 export const canRemux = (p: ProbeResult) =>
   /mp4|mov/.test(p.formatName) &&
+  !!p.video &&
+  Math.min(p.video.width, p.video.height) <= MAX_SHORT_SIDE &&
   p.video?.codec === "h264" &&
   ["yuv420p", "yuvj420p"].includes(p.video.pixFmt) &&
   (!p.audio || p.audio.codec === "aac");
@@ -75,14 +81,15 @@ export const canRemux = (p: ProbeResult) =>
 export const remuxFastStart = (input: string, output: string) =>
   run(ffmpegPath(), ["-y", "-v", "error", "-i", input, "-map", "0:v:0", "-map", "0:a:0?", "-c", "copy", "-movflags", "+faststart", output], 10 * 60_000);
 
-/** Re-encode to H.264/AAC, at most 1080p tall, fast start. Takes minutes for long videos. */
+/** Re-encode to H.264/AAC, at most 1080p (shorter side, so portrait keeps its quality), fast start. Takes minutes for long videos. */
 export const transcodeToMp4 = (input: string, output: string) =>
   run(
     ffmpegPath(),
     [
       "-y", "-v", "error", "-i", input,
       "-map", "0:v:0", "-map", "0:a:0?",
-      "-vf", "scale=-2:'min(1080,ih)'",
+      // Landscape: height <= 1080. Portrait: width <= 1080. Never enlarged; other side keeps the aspect ratio.
+      "-vf", `scale='if(gte(iw,ih),-2,min(${MAX_SHORT_SIDE},iw))':'if(gte(iw,ih),min(${MAX_SHORT_SIDE},ih),-2)'`,
       "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
       "-c:a", "aac", "-b:a", "128k",
       "-movflags", "+faststart",

@@ -204,10 +204,10 @@ sequenceDiagram
 |---|---|
 | iPhone videos (HEVC/MOV) and screen-recorder WebM files don't play in every browser | Convert to H.264 + AAC MP4, which plays everywhere |
 | Many MP4s keep their index at the end, so playback waits for the whole file | Fast start puts the index at the front |
-| 4K recordings waste bandwidth during a demo | Shrink to at most 1080p |
+| 4K or 1440p recordings waste bandwidth during a demo | Shrink to at most 1080p (the shorter side, so portrait phone videos keep their quality) |
 | The library needs previews | Generate a thumbnail |
 
-A normal H.264 MP4 is only remuxed: about 1 second, no quality loss.
+A normal H.264 MP4 up to 1080p is only remuxed: about 1 second, no quality loss. Bigger ones are converted down to 1080p.
 
 ### 5.3 Playing a video
 
