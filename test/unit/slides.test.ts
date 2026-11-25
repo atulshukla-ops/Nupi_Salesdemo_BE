@@ -3,7 +3,8 @@ import os from "os";
 import path from "path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PermanentVideoError } from "../../src/utils/ffmpeg";
-import { MAX_SLIDES, officeToPdf, pdfToSlides, SLIDE_WIDTH } from "../../src/utils/slides";
+import { createRequire } from "module";
+import { MAX_PAGE_RATIO, MAX_SLIDE_HEIGHT, MAX_SLIDES, officeToPdf, pdfToSlides, SLIDE_WIDTH } from "../../src/utils/slides";
 import { makePdf } from "../fixtures/makePdf";
 
 /** Deck conversion used by the worker, on small generated PDFs. */
@@ -17,6 +18,8 @@ describe("deck conversion", () => {
     await fs.writeFile(file("deck.pdf"), makePdf(["Welcome to NUPI", "Pricing", "Next steps"]));
     await fs.writeFile(file("portrait.pdf"), makePdf(["A4 page"], 595, 842));
     await fs.writeFile(file("broken.pdf"), "this is not a pdf");
+    await fs.writeFile(file("tall.pdf"), makePdf(["Tall but allowed"], 300, 900)); // 3x taller than wide
+    await fs.writeFile(file("strip.pdf"), makePdf(["Receipt roll"], 100, 20000)); // 200x taller than wide
     await fs.writeFile(file("huge.pdf"), makePdf(Array.from({ length: MAX_SLIDES + 1 }, (_, i) => `S${i}`), 100, 60));
   });
   afterAll(() => fs.rm(dir, { recursive: true, force: true }));
@@ -33,6 +36,21 @@ describe("deck conversion", () => {
     const r = await pdfToSlides(file("portrait.pdf"), file("out-portrait"));
     expect(r.width).toBe(SLIDE_WIDTH);
     expect(r.height).toBeGreaterThan(2600);
+  });
+
+  it(`tall pages are made narrower, never taller than ${MAX_SLIDE_HEIGHT} px`, async () => {
+    const r = await pdfToSlides(file("tall.pdf"), file("out-tall"));
+    expect(r.height).toBe(MAX_SLIDE_HEIGHT);
+    expect(r.width).toBeLessThan(SLIDE_WIDTH);
+  });
+
+  it(`pages more than ${MAX_PAGE_RATIO}x taller than wide are refused (no giant images)`, async () => {
+    await expect(pdfToSlides(file("strip.pdf"), file("out-strip"))).rejects.toThrow(/taller than it is wide/);
+  });
+
+  it("the built (CommonJS) worker can load pdf.js: Node's require(esm) keeps working", () => {
+    const req = createRequire(__filename);
+    expect(typeof req("pdfjs-dist/legacy/build/pdf.mjs").getDocument).toBe("function");
   });
 
   it("a file that is not a PDF fails permanently with a clear message", async () => {

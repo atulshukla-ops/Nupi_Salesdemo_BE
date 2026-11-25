@@ -34,9 +34,18 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 COPY package.json package-lock.json ./
-# The slide renderer's native part is an optional package: add the Linux one explicitly.
+# The slide renderer's native part is an optional package (left out with the other optional,
+# large ones above): add the one for this server's CPU (x64 or ARM, e.g. AWS Graviton), at the
+# exact version in package-lock.json.
+ARG TARGETARCH
 RUN npm ci --omit=dev --omit=optional --ignore-scripts \
- && npm install --no-save --ignore-scripts @napi-rs/canvas-linux-x64-gnu@1.1.0 \
+ && CANVAS_VERSION=$(node -p "require('./package-lock.json').packages['node_modules/@napi-rs/canvas'].version") \
+ && case "$TARGETARCH" in \
+      arm64) CANVAS_PKG=@napi-rs/canvas-linux-arm64-gnu ;; \
+      *)     CANVAS_PKG=@napi-rs/canvas-linux-x64-gnu ;; \
+    esac \
+ && npm install --no-save --ignore-scripts "$CANVAS_PKG@$CANVAS_VERSION" \
+ && node -e "require('@napi-rs/canvas')" \
  && npm cache clean --force
 COPY --from=build /app/build ./build
 

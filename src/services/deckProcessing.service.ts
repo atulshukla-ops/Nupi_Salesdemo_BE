@@ -27,12 +27,24 @@ export const processDeck = async (asset: Asset, pending: PendingUpload, version:
 
     const keys = deckKeys(asset.id, version);
     // A few at a time: fast on S3, gentle on the local disk.
+    // If one upload fails, the others stop too, and the error is raised only after all have
+    // stopped (so the temporary files are not deleted under a running upload).
     const queue = slides.files.map((file, i) => ({ file, key: keys.slide(i + 1) }));
-    await Promise.all(
+    let failed = false;
+    const results = await Promise.allSettled(
       Array.from({ length: 4 }, async () => {
-        for (let item = queue.shift(); item; item = queue.shift()) await storage().uploadFromFile(item.file, item.key, "image/jpeg");
+        for (let item = queue.shift(); item && !failed; item = queue.shift()) {
+          try {
+            await storage().uploadFromFile(item.file, item.key, "image/jpeg");
+          } catch (e) {
+            failed = true;
+            throw e;
+          }
+        }
       })
     );
+    const firstError = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+    if (firstError) throw firstError.reason;
     await storage().uploadFromFile(slides.thumbnail, keys.thumbnail, "image/jpeg");
 
     // Re-read: the user may have cancelled or started another replacement while we were working.

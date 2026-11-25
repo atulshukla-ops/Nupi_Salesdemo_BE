@@ -27,8 +27,8 @@ const extensionFor = ({ fileName, mimeType }: FileInfo) => {
 };
 
 /** "rewards-dashboard_v2.mp4" -> "rewards dashboard v2" */
-const titleFromFileName = (fileName: string) =>
-  path.parse(fileName).name.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120) || "Untitled video";
+const titleFromFileName = (fileName: string, kind: "video" | "deck") =>
+  path.parse(fileName).name.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120) || (kind === "deck" ? "Untitled deck" : "Untitled video");
 
 const requirePending = (asset: Asset, states: PendingUpload["state"][] = ["uploading"]) => {
   const pending = asset.pendingUpload;
@@ -81,7 +81,7 @@ export const startUpload = async (
   const asset = await Asset.create({
     productId: input.productId,
     kind: kindForMime(input.mimeType),
-    title: input.title || titleFromFileName(input.fileName),
+    title: input.title || titleFromFileName(input.fileName, kindForMime(input.mimeType)),
     description: input.description,
     notes: input.notes,
     status: "uploading",
