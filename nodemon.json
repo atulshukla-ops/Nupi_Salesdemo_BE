@@ -1,0 +1,6 @@
+{
+  "restartable": "rs",
+  "ignore": ["node_modules/**/node_modules", "storage/**", "logs/**"],
+  "watch": ["src"],
+  "ext": "ts,json"
+}
