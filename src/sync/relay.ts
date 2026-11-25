@@ -209,9 +209,6 @@ const onConnection = async (ws: WebSocket, url: URL, early: Early) => {
     room.host = client;
     if (room.endTimer) clearTimeout(room.endTimer);
     room.endTimer = null;
-    await ensureSession(room, claims!.name).catch((e) => logger.error(`Could not start session for ${slug}: ${e.message}`));
-    send(client, notice("ready", { viewers: room.viewers.size }));
-    for (const v of room.viewers) send(v, notice("host-online"));
   } else {
     if (room.viewers.size >= env.syncMaxViewers) {
       dropRoomIfIdle(room);
@@ -223,6 +220,8 @@ const onConnection = async (ws: WebSocket, url: URL, early: Early) => {
     send(client, notice("joined", { hostOnline: !!room.host }));
   }
 
+  // Handlers go on before anything else is awaited, so a connection that drops in the meantime
+  // is still cleaned up (and the heartbeat can see it).
   clients.add(client);
   ws.on("pong", () => (client.alive = true));
   const onMessage = (data: RawData, isBinary: boolean) => {
@@ -254,6 +253,17 @@ const onConnection = async (ws: WebSocket, url: URL, early: Early) => {
       dropRoomIfIdle(room);
     }
   });
+
+  if (role === "host") {
+    await ensureSession(room, claims!.name).catch((e) => logger.error(`Could not start session for ${slug}: ${e.message}`));
+    if (room.host === client && ws.readyState === WebSocket.OPEN) {
+      send(client, notice("ready", { viewers: room.viewers.size }));
+      for (const v of room.viewers) send(v, notice("host-online"));
+    } else if (!room.host && !room.endTimer) {
+      // The console left while the session was being created and its grace period already ran out.
+      void endRoomSession(room);
+    }
+  }
 };
 
 /** Attaches the relay to the API's HTTP server at /sync. */

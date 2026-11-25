@@ -3,6 +3,7 @@ import AppDataSource from "../configs/database";
 import { Asset } from "../entities/asset.entity";
 import { Demo } from "../entities/demo.entity";
 import { Product } from "../entities/product.entity";
+import { storage } from "../storage";
 import AppError from "../utils/appError";
 import { findActiveProduct } from "./product.service";
 
@@ -106,6 +107,16 @@ export const updateAsset = async (
 export const deleteAsset = async (id: string, by: string | null) => {
   const asset = await findLiveAsset(id);
   const usedIn = await findAssetUsage(id);
+  const pending = asset.pendingUpload;
+  if (pending?.state === "uploading") {
+    // Stop the unfinished upload now instead of leaving its parts in storage until the nightly job.
+    await storage().abortMultipartUpload(pending.objectKey, pending.uploadId);
+    asset.pendingUpload = null;
+    if (asset.version === 0) {
+      asset.status = "failed";
+      asset.failureReason = "The upload was cancelled. Upload the file again.";
+    }
+  }
   asset.deletedAt = new Date();
   asset.updatedBy = by;
   await asset.save();

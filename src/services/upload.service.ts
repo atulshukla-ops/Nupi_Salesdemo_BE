@@ -150,6 +150,8 @@ export const getUploadedParts = async (assetId: string) => {
 /** Step 3: stitches the parts together, checks the size and hands the file over for processing. */
 export const completeUpload = async (assetId: string, parts: { partNumber: number; etag: string }[], by: string | null) => {
   const asset = await findLiveAsset(assetId);
+  // Already finished (the browser retried because the first answer got lost): same result again.
+  if (asset.pendingUpload?.state === "processing") return assetWithUrls(asset);
   const pending = requirePending(asset);
   const numbers = new Set(parts.map((p) => p.partNumber));
   if (numbers.size !== pending.partCount || parts.some((p) => p.partNumber > pending.partCount)) {

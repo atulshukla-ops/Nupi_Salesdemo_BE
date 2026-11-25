@@ -1,7 +1,7 @@
-node_modules/
-build/
-logs/
-storage/
+/node_modules/
+/build/
+/logs/
+/storage/
 .env
 .env.*
 !.env.example

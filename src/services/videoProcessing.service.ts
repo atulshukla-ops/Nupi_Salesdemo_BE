@@ -2,7 +2,7 @@ import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
 import { Asset } from "../entities/asset.entity";
-import { assetKeys, assetPrefix, storage } from "../storage";
+import { assetKeys, storage, versionPrefix } from "../storage";
 import { canRemux, extractThumbnail, PermanentVideoError, probe, remuxFastStart, transcodeToMp4 } from "../utils/ffmpeg";
 import logger from "../utils/logger";
 
@@ -66,12 +66,11 @@ export const processVideo = async (assetId: string, version: number) => {
     // Re-read: the user may have cancelled or started another replacement while we were working.
     const current = await Asset.findOneBy({ id: assetId });
     if (!current || current.pendingUpload?.version !== version || current.pendingUpload.state !== "processing") {
-      await storage().deletePrefix(`${assetPrefix(assetId)}v${version}`);
+      await storage().deletePrefix(versionPrefix(assetId, version));
       logger.info(`Video ${assetId} v${version} finished but is no longer wanted; discarded`);
       return { skipped: true };
     }
 
-    const previousVersion = current.version;
     Object.assign(current, {
       status: "ready",
       failureReason: null,
@@ -89,8 +88,8 @@ export const processVideo = async (assetId: string, version: number) => {
     });
     await current.save();
 
-    // Older versions are no longer referenced by anything.
-    for (let v = 1; v <= previousVersion; v++) await storage().deletePrefix(`${assetPrefix(assetId)}v${v}`);
+    // Older versions are NOT deleted here: a demo may be playing one right now through a signed link
+    // handed out earlier. The nightly maintenance removes them once every such link has expired.
 
     logger.info(
       `Video ${assetId} v${version} ready: ${mode}, ${output.durationSec.toFixed(1)}s, ` +

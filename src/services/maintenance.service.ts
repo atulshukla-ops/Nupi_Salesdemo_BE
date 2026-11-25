@@ -1,9 +1,9 @@
-import { IsNull, LessThan, Not } from "typeorm";
+import { Between, IsNull, LessThan, MoreThan, Not } from "typeorm";
 import env from "../configs/env";
 import { Asset } from "../entities/asset.entity";
 import { Demo } from "../entities/demo.entity";
 import { enqueueVideoProcessing } from "../jobs/boss";
-import { assetPrefix, storage } from "../storage";
+import { assetPrefix, storage, versionPrefix } from "../storage";
 import { listMultipartUploads } from "../storage/localStorage.driver";
 import logger from "../utils/logger";
 
@@ -14,13 +14,14 @@ const HOUR = 60 * 60 * 1000;
  *  - uploads left unfinished for UPLOAD_ABANDON_HOURS (24) are cancelled (a new video that never finished is removed)
  *  - files stuck in "processing" for PROCESSING_REQUEUE_MINUTES (60) are queued again (e.g. the worker was down)
  *  - Trash items older than TRASH_RETENTION_DAYS are deleted for good, including their files
+ *  - files of replaced video versions are deleted once no playback link to them can still be valid
  *  - (local storage) part folders that no upload refers to any more are removed
  */
 export const runMaintenance = async () => {
   const now = Date.now();
   const ABANDONED_AFTER_MS = env.uploadAbandonHours * HOUR;
   const REQUEUE_PROCESSING_AFTER_MS = env.processingRequeueMinutes * 60 * 1000;
-  const report = { abandonedUploads: 0, removedUnfinishedVideos: 0, requeued: 0, purgedAssets: 0, purgedDemos: 0, orphanPartFolders: 0 };
+  const report = { abandonedUploads: 0, removedUnfinishedVideos: 0, requeued: 0, purgedAssets: 0, purgedDemos: 0, oldVersionsRemoved: 0, orphanPartFolders: 0 };
 
   const withUploads = await Asset.find({ where: { pendingUpload: Not(IsNull()) } });
   for (const asset of withUploads) {
@@ -54,6 +55,15 @@ export const runMaintenance = async () => {
   const oldDemos = await Demo.find({ where: { deletedAt: LessThan(cutoff) } });
   if (oldDemos.length) await Demo.remove(oldDemos);
   report.purgedDemos = oldDemos.length;
+
+  // Replaced versions: kept until every signed link handed out before the replacement has expired
+  // (link lifetime + 1 h margin). Looking back a week covers nights the job did not run.
+  const safeBefore = new Date(now - env.playbackUrlTtlSec * 1000 - HOUR);
+  const lookBack = new Date(safeBefore.getTime() - 7 * 24 * HOUR);
+  for (const asset of await Asset.find({ where: { replacedAt: Between(lookBack, safeBefore), version: MoreThan(1) } })) {
+    for (let v = 1; v < asset.version; v++) await storage().deletePrefix(versionPrefix(asset.id, v));
+    report.oldVersionsRemoved++;
+  }
 
   if (storage().name === "local") {
     const referenced = new Set(

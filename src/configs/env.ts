@@ -64,6 +64,6 @@ export default {
 
   // housekeeping
   trashRetentionDays: num(process.env.TRASH_RETENTION_DAYS, 30),
-  uploadAbandonHours: Number(process.env.UPLOAD_ABANDON_HOURS ?? 24),
-  processingRequeueMinutes: Number(process.env.PROCESSING_REQUEUE_MINUTES ?? 60)
+  uploadAbandonHours: num(process.env.UPLOAD_ABANDON_HOURS, 24),
+  processingRequeueMinutes: num(process.env.PROCESSING_REQUEUE_MINUTES, 60)
 };
