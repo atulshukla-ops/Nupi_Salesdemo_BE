@@ -150,7 +150,9 @@ Check that it works:
 | `npm test` | All tests pass (no DB needed) |
 | `npm run cleanup:now` | Runs the nightly cleanup once |
 
-Local storage: uploaded files go to `./storage/` and are served through signed links at `/api/storage-local/...`. When DevOps sets up S3, switch `STORAGE_DRIVER=s3` and nothing else changes for the app.
+Local storage: uploaded files go to `./storage/` and are served through signed links at `/api/storage-local/...`. When DevOps sets up S3, switch `STORAGE_DRIVER=s3` (see DEPLOYMENT.md for the values) and nothing else changes for the app: the browser uploads to and plays from S3/CloudFront links instead.
+
+To test the S3 code without AWS, run an S3 emulator (`pip install "moto[server]"`, then `moto_server -p 4566`) and run `S3_TEST_ENDPOINT=http://localhost:4566 npm test`.
 
 ---
 

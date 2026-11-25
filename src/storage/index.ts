@@ -1,12 +1,13 @@
 import env from "../configs/env";
 import { localDriver } from "./localStorage.driver";
+import { s3Driver } from "./s3Storage.driver";
 import { StorageDriver } from "./storage.types";
 
 /** The active storage driver, chosen by STORAGE_DRIVER. */
 export const storage = (): StorageDriver => {
   if (env.storageDriver === "local") return localDriver;
-  // The S3 driver is added when the AWS bucket/CloudFront setup is approved and ready.
-  throw new Error(`STORAGE_DRIVER=${env.storageDriver} is not available yet; use "local"`);
+  if (env.storageDriver === "s3") return s3Driver;
+  throw new Error(`Unknown STORAGE_DRIVER=${env.storageDriver}; use "local" or "s3"`);
 };
 
 /** Object keys for an asset. The version is part of the path so a replaced file never hits a stale cache. */

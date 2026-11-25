@@ -1,7 +1,7 @@
 /**
  * What the app needs from file storage. Two implementations:
  *  - local: files on this machine (development), served by our own signed endpoints
- *  - s3:    AWS S3 multipart uploads + presigned URLs (added when the AWS bucket is ready)
+ *  - s3:    AWS S3 (or MinIO) multipart uploads + presigned URLs, CloudFront signed URLs for playback
  * The browser only ever sees signed URLs, so switching driver does not change the frontend.
  */
 export interface UploadedPart {

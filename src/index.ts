@@ -13,6 +13,11 @@ const checkConfig = () => {
   if (env.teamKey.length < 16) problems.push("TEAM_KEY must be set (at least 16 characters)");
   if (env.hostTokenSecret.length < 32) problems.push("HOST_TOKEN_SECRET must be set (at least 32 characters)");
   if (!env.dbName || !env.dbUserName) problems.push("DB_NAME and DB_USERNAME must be set");
+  if (env.storageDriver !== "local" && env.storageDriver !== "s3") problems.push('STORAGE_DRIVER must be "local" or "s3"');
+  if (env.storageDriver === "s3" && !env.s3Bucket) problems.push("S3_BUCKET must be set when STORAGE_DRIVER=s3");
+  if (env.storageDriver === "s3" && !env.storagePrefix) problems.push("STORAGE_PREFIX must be set (the bucket is shared)");
+  const cf = [env.cloudfrontDomain, env.cloudfrontKeyPairId, env.cloudfrontPrivateKey].filter(Boolean).length;
+  if (cf > 0 && cf < 3) problems.push("CLOUDFRONT_DOMAIN, CLOUDFRONT_KEY_PAIR_ID and CLOUDFRONT_PRIVATE_KEY must be set together");
   if (!env.corsOrigins.length) logger.warn("CORS_ORIGINS is empty: browsers will not be able to call the API");
   if (problems.length) {
     problems.forEach((p) => logger.error(`Config: ${p}`));
