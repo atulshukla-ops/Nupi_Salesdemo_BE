@@ -31,8 +31,8 @@ export const getTrash = async () => {
   ]);
   return {
     retentionDays: env.trashRetentionDays,
-    // Archived products are kept until someone deletes them; they are never purged automatically.
-    products: products.map(productToJSON),
+    // Archived products (deleted tabs) are kept until someone deletes them for good; never purged automatically.
+    products: await Promise.all(products.map(async (p) => ({ ...productToJSON(p), videoCount: await Asset.count({ where: { productId: p.id } }) }))),
     assets: await Promise.all(assets.map(async (a) => ({ ...(await assetWithUrls(a)), deletedAt: a.deletedAt, purgeAt: purgeAt(a.deletedAt) }))),
     demos: demos
       .filter((d) => !d.isTemplate)

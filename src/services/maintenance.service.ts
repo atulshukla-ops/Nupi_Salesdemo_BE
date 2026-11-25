@@ -6,6 +6,7 @@ import { enqueueVideoProcessing } from "../jobs/boss";
 import { assetPrefix, storage, versionPrefix } from "../storage";
 import { listMultipartUploads } from "../storage/localStorage.driver";
 import logger from "../utils/logger";
+import { purgeAsset } from "./trash.service";
 
 const HOUR = 60 * 60 * 1000;
 
@@ -47,8 +48,7 @@ export const runMaintenance = async () => {
 
   const cutoff = new Date(now - env.trashRetentionDays * 24 * HOUR);
   for (const asset of await Asset.find({ where: { deletedAt: LessThan(cutoff) } })) {
-    await storage().deletePrefix(assetPrefix(asset.id));
-    await asset.remove();
+    await purgeAsset(asset);
     report.purgedAssets++;
   }
   // Live sessions of a purged demo are removed with it (ON DELETE CASCADE).

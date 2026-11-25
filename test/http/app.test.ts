@@ -70,6 +70,18 @@ describe("validation and errors", () => {
   });
 });
 
+describe("permanent delete from Trash", () => {
+  it("needs the team key", async () => {
+    expect((await request(app).delete(`/api/trash/assets/${ID}`)).status).toBe(401);
+  });
+  it("only accepts known kinds and valid ids", async () => {
+    const bad = await request(app).delete(`/api/trash/everything/${ID}`).set("X-Team-Key", KEY);
+    expect(bad.status).toBe(422);
+    expect(bad.body.message).toBe("kind must be assets, demos, flows or products");
+    expect((await request(app).delete("/api/trash/assets/not-an-id").set("X-Team-Key", KEY)).status).toBe(422);
+  });
+});
+
 describe("CORS", () => {
   it("allows the configured frontend, with the custom headers and ETag", async () => {
     const r = await request(app)
