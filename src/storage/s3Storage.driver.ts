@@ -49,9 +49,47 @@ const own = (key: string) => {
   return key;
 };
 
+const errName = (e: unknown) => (e as { name?: string })?.name;
 const isMissing = (e: unknown) => {
-  const err = e as { name?: string; $metadata?: { httpStatusCode?: number } };
-  return err?.name === "NoSuchUpload" || err?.name === "NotFound" || err?.name === "NoSuchKey" || err?.$metadata?.httpStatusCode === 404;
+  const name = errName(e);
+  if (name === "NoSuchBucket") return false; // wrong S3_BUCKET: a setup problem, never "not found"
+  return name === "NoSuchUpload" || name === "NotFound" || name === "NoSuchKey" || (e as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode === 404;
+};
+
+/**
+ * HEAD requests have no body, so a missing bucket also comes back as plain "NotFound". Before
+ * answering "no such file", make sure the bucket itself exists (checked once). Uses a listing of
+ * our own folder, which the IAM policy allows (HeadBucket would need wider permissions).
+ */
+const bucketChecked = new Map<string, Promise<void>>();
+export const assertBucket = () => {
+  const bucket = Bucket();
+  let check = bucketChecked.get(bucket);
+  if (!check) {
+    check = s3()
+      .send(new ListObjectsV2Command({ Bucket: bucket, Prefix: OWN_PREFIX(), MaxKeys: 1 }))
+      .then(() => undefined)
+      .catch((e) => {
+        bucketChecked.delete(bucket);
+        if (errName(e) === "NoSuchBucket") throw new Error(`S3 bucket "${bucket}" does not exist. Check S3_BUCKET and AWS_REGION.`);
+        throw e;
+      });
+    bucketChecked.set(bucket, check);
+  }
+  return check;
+};
+
+/**
+ * Plain S3 links are signed with the server's credentials and stop working when those expire.
+ * An IAM role's credentials are temporary (they rotate every few hours), so a link must never
+ * claim to last longer than the credentials that signed it. Returns when to sign and for how long.
+ */
+export const s3LinkWindow = (nowSec: number, wantedExpSec: number, alignSec: number | undefined, credentialsExpSec?: number) => {
+  // Aligned (cacheable) links are signed from the start of the window, but only with long-lived keys.
+  const start = alignSec && !credentialsExpSec ? Math.floor(nowSec / alignSec) * alignSec : nowSec;
+  const limit = credentialsExpSec ? credentialsExpSec - 60 : Infinity;
+  const until = Math.min(wantedExpSec, limit, start + MAX_PRESIGN_SEC);
+  return { start, expiresIn: Math.max(60, until - start) };
 };
 
 /** CloudFront private key from CLOUDFRONT_PRIVATE_KEY (PEM; "\n" written as \\n in .env is fine). */
@@ -83,7 +121,10 @@ export const s3Driver: StorageDriver = {
         marker = r.IsTruncated ? r.NextPartNumberMarker : undefined;
       } while (marker);
     } catch (e) {
-      if (isMissing(e)) return [];
+      if (isMissing(e)) {
+        await assertBucket();
+        return [];
+      }
       throw e;
     }
     return parts.sort((a, b) => a.partNumber - b.partNumber);
@@ -121,7 +162,10 @@ export const s3Driver: StorageDriver = {
       const r = await s3().send(new HeadObjectCommand({ Bucket: Bucket(), Key: own(key) }));
       return { size: r.ContentLength ?? 0 };
     } catch (e) {
-      if (isMissing(e)) return null;
+      if (isMissing(e)) {
+        await assertBucket();
+        return null;
+      }
       throw e;
     }
   },
@@ -138,11 +182,10 @@ export const s3Driver: StorageDriver = {
       });
       return { url, expiresAt: new Date(exp * 1000) };
     }
-    // Plain S3: sign from the start of the alignment window, so the same URL is returned all
-    // through the window (lets browsers cache thumbnails).
-    const nowSec = Math.floor(Date.now() / 1000);
-    const start = alignSec ? Math.floor(nowSec / alignSec) * alignSec : nowSec;
-    const expiresIn = Math.min(MAX_PRESIGN_SEC, exp - start);
+    // Plain S3 (no CloudFront): see s3LinkWindow for how long a link can honestly last.
+    const credentials = await s3().config.credentials();
+    const credsExp = credentials.expiration ? Math.floor(credentials.expiration.getTime() / 1000) : undefined;
+    const { start, expiresIn } = s3LinkWindow(Math.floor(Date.now() / 1000), exp, alignSec, credsExp);
     const url = await s3Sign(s3(), new GetObjectCommand({ Bucket: Bucket(), Key: key }), {
       expiresIn,
       signingDate: new Date(start * 1000)
@@ -156,7 +199,14 @@ export const s3Driver: StorageDriver = {
     do {
       const r = await s3().send(new ListObjectsV2Command({ Bucket: Bucket(), Prefix: p, ContinuationToken: token }));
       const keys = (r.Contents ?? []).map((o) => ({ Key: o.Key! }));
-      if (keys.length) await s3().send(new DeleteObjectsCommand({ Bucket: Bucket(), Delete: { Objects: keys, Quiet: true } }));
+      if (keys.length) {
+        // With Quiet, S3 still answers 200 and lists only the objects it could NOT delete.
+        const d = await s3().send(new DeleteObjectsCommand({ Bucket: Bucket(), Delete: { Objects: keys, Quiet: true } }));
+        if (d.Errors?.length) {
+          const first = d.Errors[0];
+          throw new Error(`Could not delete ${d.Errors.length} file(s) under ${p} (first: ${first.Key}: ${first.Code} ${first.Message ?? ""})`.trim());
+        }
+      }
       token = r.IsTruncated ? r.NextContinuationToken : undefined;
     } while (token);
   },

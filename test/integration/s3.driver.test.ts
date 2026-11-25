@@ -94,6 +94,19 @@ describe.skipIf(!endpoint)("S3 storage driver", () => {
     expect(await s3Driver.headObject("sales-demo/videos/test/v10/play.mp4")).toEqual({ size: 4 });
   });
 
+  it("a wrong bucket name is a clear setup error, not 'file not found'", async () => {
+    const env = (await import("../../src/configs/env")).default;
+    const real = env.s3Bucket;
+    env.s3Bucket = "sdr-no-such-bucket";
+    try {
+      await expect(s3Driver.headObject(KEY)).rejects.toThrow(/does not exist\. Check S3_BUCKET/);
+      await expect(s3Driver.listParts(KEY, "some-upload")).rejects.toThrow(/does not exist|NoSuchBucket/);
+    } finally {
+      env.s3Bucket = real;
+    }
+    expect(await s3Driver.headObject("sales-demo/videos/none/v1/play.mp4")).toBeNull(); // real bucket: plain "missing"
+  });
+
   it("shared bucket guard: refuses keys outside the app's folder", async () => {
     await raw.send(new PutObjectCommand({ Bucket: BUCKET, Key: "other-app/important.txt", Body: "not ours" }));
     await expect(s3Driver.deletePrefix("other-app/")).rejects.toMatchObject({ statusCode: 400 });

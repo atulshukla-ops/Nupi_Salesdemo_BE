@@ -88,8 +88,9 @@ export const transcodeToMp4 = (input: string, output: string) =>
     [
       "-y", "-v", "error", "-i", input,
       "-map", "0:v:0", "-map", "0:a:0?",
-      // Landscape: height <= 1080. Portrait: width <= 1080. Never enlarged; other side keeps the aspect ratio.
-      "-vf", `scale='if(gte(iw,ih),-2,min(${MAX_SHORT_SIDE},iw))':'if(gte(iw,ih),min(${MAX_SHORT_SIDE},ih),-2)'`,
+      // Landscape: height <= 1080. Portrait: width <= 1080. Never enlarged; other side keeps the aspect
+      // ratio. Both sides are rounded down to even numbers, which H.264 (4:2:0) requires.
+      "-vf", `scale='if(gte(iw,ih),-2,trunc(min(${MAX_SHORT_SIDE},iw)/2)*2)':'if(gte(iw,ih),trunc(min(${MAX_SHORT_SIDE},ih)/2)*2,-2)'`,
       "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
       "-c:a", "aac", "-b:a", "128k",
       "-movflags", "+faststart",

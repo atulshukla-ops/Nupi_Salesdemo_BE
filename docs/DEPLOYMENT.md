@@ -91,7 +91,7 @@ curl http://localhost:8130/health  # {"status":"UP",...}
 | `STORAGE_DRIVER` | `local` now → `s3` after the AWS setup | |
 | `S3_BUCKET` / `AWS_REGION` / `STORAGE_PREFIX` | `storagenupi` / `ap-south-1` / `sales-demo` | Used once `STORAGE_DRIVER=s3`. The app never reads, writes or deletes anything outside `STORAGE_PREFIX/`. |
 | AWS credentials | *(none)* | Best: the server's IAM role (nothing to set). Otherwise `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`. |
-| `CLOUDFRONT_DOMAIN` / `CLOUDFRONT_KEY_PAIR_ID` / `CLOUDFRONT_PRIVATE_KEY` | `dxxxx.cloudfront.net` / `K2…` / PEM | Set all three for CloudFront playback links, or none (then S3 presigned links are used). Write the PEM on one line with `\n` for line breaks. |
+| `CLOUDFRONT_DOMAIN` / `CLOUDFRONT_KEY_PAIR_ID` / `CLOUDFRONT_PRIVATE_KEY` | `dxxxx.cloudfront.net` / `K2…` / PEM | Set all three for CloudFront playback links, or none (then S3 presigned links are used). Write the PEM on one line with `\n` for line breaks. **Use CloudFront in production:** S3 presigned links signed with an IAM role only last until the role's credentials rotate (a few hours). The domain must be the bare host name, without a path. |
 | `S3_ENDPOINT` | *(empty)* | Only for an S3-compatible test server; leave empty on AWS |
 | `WORKER_CONCURRENCY` | `1` | Videos converted at the same time |
 

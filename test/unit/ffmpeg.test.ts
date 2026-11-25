@@ -86,6 +86,9 @@ describe("1080p limit", () => {
     makeSized(at("portrait-1080.mp4"), "1080x1920");
     makeSized(at("portrait-1440.mp4"), "1440x2560");
     makeSized(at("720p.mp4"), "1280x720");
+    // Odd sizes can't be H.264 4:2:0, but they do arrive as WebM / screen recordings.
+    const r = spawnSync(ffmpeg, ["-y", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=719x1280:rate=25:duration=1", "-c:v", "libvpx-vp9", "-b:v", "300k", at("odd-portrait.webm")]);
+    if (r.status !== 0) throw new Error(r.stderr.toString());
   });
   afterAll(() => fs.rm(dir2, { recursive: true, force: true }));
 
@@ -104,6 +107,11 @@ describe("1080p limit", () => {
     expect(canRemux(await probe(at("portrait-1440.mp4")))).toBe(false);
     await transcodeToMp4(at("portrait-1440.mp4"), at("portrait-out.mp4"));
     expect((await probe(at("portrait-out.mp4"))).video).toMatchObject({ width: 1080, height: 1920 });
+  });
+
+  it("odd sizes are rounded to even numbers, which H.264 needs (no failed conversion)", async () => {
+    await transcodeToMp4(at("odd-portrait.webm"), at("odd-out.mp4"));
+    expect((await probe(at("odd-out.mp4"))).video).toMatchObject({ width: 718, height: 1278 });
   });
 
   it("small videos are never enlarged when converted", async () => {
