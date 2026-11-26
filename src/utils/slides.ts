@@ -1,5 +1,5 @@
 import { spawn } from "child_process";
-import { existsSync, promises as fs } from "fs";
+import { existsSync, mkdirSync, promises as fs } from "fs";
 import path from "path";
 import { PermanentVideoError } from "./ffmpeg";
 
@@ -38,35 +38,62 @@ export const sofficePath = () => {
 };
 
 /**
- * What a deck file really is, from its first bytes (the name and type sent by the browser can
- * be wrong): PDF, PPTX (a ZIP package) or PPT (an OLE compound file). Anything else → null.
+ * What a deck file really is, from its content (the name and type sent by the browser can be
+ * wrong). Checked before converting, so a renamed text, Word or Excel file is refused instead of
+ * being "converted" into a deck:
+ *   pdf  — "%PDF-" in the first 1 KB (the PDF format allows a few bytes before it)
+ *   pptx — a ZIP package that contains ppt/presentation.xml (PPTX, PPTM, PPSX, Strict OOXML)
+ *   ppt  — an OLE file with a "PowerPoint Document" part (PowerPoint 97–2003)
+ *   encrypted — a password-protected PowerPoint (stored as an OLE file with an encrypted package)
  */
 export type DeckFormat = "pdf" | "pptx" | "ppt";
+export type DeckSniff = DeckFormat | "encrypted" | null;
+
 const OLE_MAGIC = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
-export const sniffDeck = (head: Buffer): DeckFormat | null => {
-  if (head.subarray(0, 5).toString("latin1") === "%PDF-") return "pdf";
-  if (head[0] === 0x50 && head[1] === 0x4b && head[2] === 0x03 && head[3] === 0x04) return "pptx";
-  if (head.subarray(0, 8).equals(OLE_MAGIC)) return "ppt";
+const utf16 = (t: string) => Buffer.from(t, "utf16le");
+const PPT_STREAM = utf16("PowerPoint Document");
+const ENCRYPTED_STREAM = utf16("EncryptedPackage");
+const PPTX_PART = Buffer.from("ppt/presentation.xml", "latin1");
+/** ZIP file names are stored uncompressed in the central directory at the end of the file. */
+const ZIP_TAIL_BYTES = 4 * 1024 * 1024;
+/** Old-format decks are small; the part names live in the OLE directory, which can be anywhere. */
+const OLE_SCAN_BYTES = 64 * 1024 * 1024;
+
+/** Pure check on the bytes (head = start of the file, tail = end of the file, or all of it). */
+export const sniffDeck = (head: Buffer, tail: Buffer = head): DeckSniff => {
+  if (head.subarray(0, 1024).includes("%PDF-", 0, "latin1")) return "pdf";
+  if (head[0] === 0x50 && head[1] === 0x4b && head[2] === 0x03 && head[3] === 0x04) return tail.includes(PPTX_PART) ? "pptx" : null;
+  if (head.subarray(0, 8).equals(OLE_MAGIC)) {
+    if (tail.includes(ENCRYPTED_STREAM)) return "encrypted";
+    return tail.includes(PPT_STREAM) ? "ppt" : null;
+  }
   return null;
 };
-export const readDeckFormat = async (file: string) => {
+
+const readAt = async (fh: fs.FileHandle, position: number, length: number) => {
+  const buf = Buffer.alloc(Math.max(0, length));
+  const { bytesRead } = await fh.read(buf, 0, buf.length, position);
+  return buf.subarray(0, bytesRead);
+};
+
+export const readDeckFormat = async (file: string): Promise<DeckSniff> => {
   const fh = await fs.open(file, "r");
   try {
-    const head = Buffer.alloc(8);
-    await fh.read(head, 0, 8, 0);
+    const size = (await fh.stat()).size;
+    const head = await readAt(fh, 0, Math.min(size, 1024));
+    if (head[0] === 0x50 && head[1] === 0x4b) return sniffDeck(head, await readAt(fh, Math.max(0, size - ZIP_TAIL_BYTES), Math.min(size, ZIP_TAIL_BYTES)));
+    if (head.subarray(0, 8).equals(OLE_MAGIC)) return sniffDeck(head, await readAt(fh, 0, Math.min(size, OLE_SCAN_BYTES)));
     return sniffDeck(head);
   } finally {
     await fh.close();
   }
 };
 
-/**
- * LibreOffice import filters. Naming the filter stops LibreOffice from guessing: without it, a
- * text file renamed to .pptx is opened as a text document and "converted" into a PDF.
- */
-const IMPORT_FILTER: Record<Exclude<DeckFormat, "pdf">, string> = {
-  pptx: "Impress MS PowerPoint 2007 XML",
-  ppt: "MS PowerPoint 97"
+/** The type to record for a deck, from what it really is (not what the browser claimed). */
+export const DECK_MIME: Record<DeckFormat, string> = {
+  pdf: "application/pdf",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ppt: "application/vnd.ms-powerpoint"
 };
 
 /**
@@ -83,14 +110,20 @@ const killTree = (pid: number | undefined) => {
   }
 };
 
-/** PPTX/PPT → PDF with LibreOffice (headless). Returns the PDF path. */
-export const officeToPdf = (input: string, outDir: string, format: Exclude<DeckFormat, "pdf"> = "pptx", timeoutMs = 5 * 60_000) =>
+/**
+ * PPTX/PPT → PDF with LibreOffice (headless). Returns the PDF path. The caller checks the file
+ * with readDeckFormat first; LibreOffice then picks the exact PowerPoint flavour itself.
+ * The PDF is written to its own folder, so it can never be confused with the input file.
+ */
+export const officeToPdf = (input: string, outDir: string, timeoutMs = 5 * 60_000) =>
   new Promise<string>((resolve, reject) => {
+    const pdfDir = path.join(outDir, "pdf");
+    mkdirSync(pdfDir, { recursive: true });
     // A private profile per run: parallel conversions don't fight over one LibreOffice profile.
     const profile = `file:///${path.join(outDir, "lo-profile").split(path.sep).join("/").replace(/^\/+/, "")}`;
     const child = spawn(
       sofficePath(),
-      [`-env:UserInstallation=${profile}`, "--headless", "--norestore", "--nologo", `--infilter=${IMPORT_FILTER[format]}`, "--convert-to", "pdf", "--outdir", outDir, input],
+      [`-env:UserInstallation=${profile}`, "--headless", "--norestore", "--nologo", "--convert-to", "pdf", "--outdir", pdfDir, input],
       {
         windowsHide: true,
         // Its normal output is not needed; leaving it unread could fill the pipe and stall the conversion.
@@ -117,7 +150,7 @@ export const officeToPdf = (input: string, outDir: string, format: Exclude<DeckF
       clearTimeout(timer);
       // A slow conversion (busy server) is worth another try, so this is NOT a permanent failure.
       if (timedOut) return reject(new Error(`LibreOffice did not finish within ${Math.round(timeoutMs / 1000)} s`));
-      const pdf = path.join(outDir, `${path.parse(input).name}.pdf`);
+      const pdf = path.join(pdfDir, `${path.parse(input).name}.pdf`);
       if (code === 0 && existsSync(pdf)) return resolve(pdf);
       reject(new PermanentVideoError(`Could not convert this presentation (${stderr.trim().split("\n").pop() || `exit code ${code}`}). Try saving it as PDF.`));
     });
