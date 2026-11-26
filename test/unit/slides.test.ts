@@ -4,7 +4,7 @@ import path from "path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PermanentVideoError } from "../../src/utils/ffmpeg";
 import { createRequire } from "module";
-import { MAX_PAGE_RATIO, MAX_SLIDE_HEIGHT, MAX_SLIDES, officeToPdf, pdfToSlides, SLIDE_WIDTH } from "../../src/utils/slides";
+import { MAX_PAGE_RATIO, MAX_SLIDE_HEIGHT, MAX_SLIDES, officeToPdf, pdfToSlides, sniffDeck, SLIDE_WIDTH } from "../../src/utils/slides";
 import { makePdf } from "../fixtures/makePdf";
 
 /** Deck conversion used by the worker, on small generated PDFs. */
@@ -59,6 +59,14 @@ describe("deck conversion", () => {
 
   it(`refuses decks with more than ${MAX_SLIDES} slides`, async () => {
     await expect(pdfToSlides(file("huge.pdf"), file("out-huge"))).rejects.toThrow(/at most 300 slides/);
+  });
+
+  it("recognises decks by their content, not their name", () => {
+    expect(sniffDeck(Buffer.from("%PDF-1.7 "))).toBe("pdf");
+    expect(sniffDeck(Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0, 6, 0]))).toBe("pptx");
+    expect(sniffDeck(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]))).toBe("ppt");
+    expect(sniffDeck(Buffer.from("not really a presentation"))).toBeNull();
+    expect(sniffDeck(Buffer.alloc(0))).toBeNull();
   });
 
   it("PowerPoint without LibreOffice: clear message to upload a PDF instead", async () => {

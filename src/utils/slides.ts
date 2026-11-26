@@ -37,7 +37,38 @@ export const sofficePath = () => {
   return candidates.find((c) => existsSync(c)) ?? "soffice";
 };
 
-/** PPTX/PPT → PDF with LibreOffice (headless). Returns the PDF path. */
+/**
+ * What a deck file really is, from its first bytes (the name and type sent by the browser can
+ * be wrong): PDF, PPTX (a ZIP package) or PPT (an OLE compound file). Anything else → null.
+ */
+export type DeckFormat = "pdf" | "pptx" | "ppt";
+const OLE_MAGIC = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+export const sniffDeck = (head: Buffer): DeckFormat | null => {
+  if (head.subarray(0, 5).toString("latin1") === "%PDF-") return "pdf";
+  if (head[0] === 0x50 && head[1] === 0x4b && head[2] === 0x03 && head[3] === 0x04) return "pptx";
+  if (head.subarray(0, 8).equals(OLE_MAGIC)) return "ppt";
+  return null;
+};
+export const readDeckFormat = async (file: string) => {
+  const fh = await fs.open(file, "r");
+  try {
+    const head = Buffer.alloc(8);
+    await fh.read(head, 0, 8, 0);
+    return sniffDeck(head);
+  } finally {
+    await fh.close();
+  }
+};
+
+/**
+ * LibreOffice import filters. Naming the filter stops LibreOffice from guessing: without it, a
+ * text file renamed to .pptx is opened as a text document and "converted" into a PDF.
+ */
+const IMPORT_FILTER: Record<Exclude<DeckFormat, "pdf">, string> = {
+  pptx: "Impress MS PowerPoint 2007 XML",
+  ppt: "MS PowerPoint 97"
+};
+
 /**
  * Stops LibreOffice and everything it started. On Linux `soffice` is a launcher that starts the
  * real `soffice.bin`, so killing only the launcher would leave the real program running.
@@ -53,13 +84,13 @@ const killTree = (pid: number | undefined) => {
 };
 
 /** PPTX/PPT → PDF with LibreOffice (headless). Returns the PDF path. */
-export const officeToPdf = (input: string, outDir: string, timeoutMs = 5 * 60_000) =>
+export const officeToPdf = (input: string, outDir: string, format: Exclude<DeckFormat, "pdf"> = "pptx", timeoutMs = 5 * 60_000) =>
   new Promise<string>((resolve, reject) => {
     // A private profile per run: parallel conversions don't fight over one LibreOffice profile.
     const profile = `file:///${path.join(outDir, "lo-profile").split(path.sep).join("/").replace(/^\/+/, "")}`;
     const child = spawn(
       sofficePath(),
-      [`-env:UserInstallation=${profile}`, "--headless", "--norestore", "--nologo", "--convert-to", "pdf", "--outdir", outDir, input],
+      [`-env:UserInstallation=${profile}`, "--headless", "--norestore", "--nologo", `--infilter=${IMPORT_FILTER[format]}`, "--convert-to", "pdf", "--outdir", outDir, input],
       {
         windowsHide: true,
         // Its normal output is not needed; leaving it unread could fill the pipe and stall the conversion.

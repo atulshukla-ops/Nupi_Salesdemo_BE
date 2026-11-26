@@ -5,7 +5,8 @@ import { PendingUpload } from "../constants/types";
 import { Asset } from "../entities/asset.entity";
 import { deckKeys, storage, versionPrefix } from "../storage";
 import logger from "../utils/logger";
-import { officeToPdf, pdfToSlides } from "../utils/slides";
+import { PermanentVideoError } from "../utils/ffmpeg";
+import { officeToPdf, pdfToSlides, readDeckFormat } from "../utils/slides";
 
 /**
  * Turns an uploaded deck into what viewers see:
@@ -21,8 +22,10 @@ export const processDeck = async (asset: Asset, pending: PendingUpload, version:
     const original = path.join(work, path.basename(pending.objectKey));
     await storage().downloadToFile(pending.objectKey, original);
 
-    const isPdf = pending.mimeType === "application/pdf" || /\.pdf$/i.test(original);
-    const pdf = isPdf ? original : await officeToPdf(original, work);
+    // Trust the file's content, not its name: a renamed file must not slip through.
+    const format = await readDeckFormat(original);
+    if (!format) throw new PermanentVideoError("This file is not a PowerPoint (PPTX/PPT) or PDF file. Open it in PowerPoint and save it again, or upload a PDF.");
+    const pdf = format === "pdf" ? original : await officeToPdf(original, work, format);
     const slides = await pdfToSlides(pdf, path.join(work, "slides"));
 
     const keys = deckKeys(asset.id, version);
