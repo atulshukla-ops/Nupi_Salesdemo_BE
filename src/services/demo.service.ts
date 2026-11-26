@@ -2,7 +2,7 @@ import { IsNull, Not } from "typeorm";
 import env from "../configs/env";
 import { issueHostToken } from "../sync/hostToken";
 import { listSessions } from "../sync/sessions";
-import { transcriptSummaryJSON } from "./transcript.service";
+import { loadTranscriptHeads, transcriptSummaryJSON } from "./transcript.service";
 import { DEFAULT_OPTIONS, DEFAULT_WELCOME, DemoOptions, DemoWelcome, RunOfShow } from "../constants/types";
 import { Demo } from "../entities/demo.entity";
 import AppError from "../utils/appError";
@@ -290,7 +290,9 @@ export const issueLiveToken = async (id: string, by: string | null) => {
 
 export const getDemoSessions = async (id: string) => {
   await findLive(id, false);
-  return (await listSessions(id)).map((s) => ({
+  const sessions = await listSessions(id);
+  const heads = await loadTranscriptHeads(sessions.filter((s) => s.transcriptVendorId).map((s) => s.id));
+  return sessions.map((s) => ({
     id: s.id,
     presenterName: s.presenterName,
     startedAt: s.startedAt,
@@ -298,7 +300,7 @@ export const getDemoSessions = async (id: string) => {
     peakViewers: s.peakViewers,
     viewers: s.viewers,
     meetingLink: s.meetingLink,
-    transcript: transcriptSummaryJSON(s)
+    transcript: transcriptSummaryJSON(s, heads.get(s.id) ?? null)
   }));
 };
 

@@ -9,6 +9,9 @@ import AppError from "../utils/appError";
 
 export const transcriptionEnabled = () => !!env.firefliesApiKey;
 
+/** The API key is missing or refused: retrying cannot help until an admin fixes the settings. */
+export class NotetakerConfigError extends AppError {}
+
 interface GqlError {
   message: string;
   code?: string;
@@ -27,12 +30,12 @@ const toAppError = (e: GqlError | undefined, httpStatus: number, retryAfter: str
   if (code === "invalid_language_code") return new AppError(400, "The notetaker does not support this language.");
   if (code === "object_not_found") return new AppError(404, "The notetaker has no transcript for this meeting (yet).");
   if (httpStatus === 401 || httpStatus === 403 || /auth|api key|token/i.test(code + (e?.message ?? "")))
-    return new AppError(502, "The notetaker service refused our API key. Ask the admin to check FIREFLIES_API_KEY.");
+    return new NotetakerConfigError(502, "The notetaker service refused our API key. Ask the admin to check FIREFLIES_API_KEY.");
   return new AppError(502, `The notetaker service failed: ${(e?.message || `HTTP ${httpStatus}`).slice(0, 200)}`);
 };
 
 export async function gql<T>(query: string, variables: Record<string, unknown>): Promise<T> {
-  if (!transcriptionEnabled()) throw new AppError(503, "Transcription is not set up on the server (FIREFLIES_API_KEY is empty).");
+  if (!transcriptionEnabled()) throw new NotetakerConfigError(503, "Transcription is not set up on the server (FIREFLIES_API_KEY is empty).");
   let res: Response;
   try {
     res = await fetch(env.firefliesApiUrl, {

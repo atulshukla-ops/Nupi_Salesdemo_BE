@@ -2,7 +2,7 @@ import { createHmac } from "crypto";
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import app from "../../src/app";
-import { addToLiveMeeting, getTranscript } from "../../src/services/fireflies.client";
+import { addToLiveMeeting, getTranscript, NotetakerConfigError } from "../../src/services/fireflies.client";
 import {
   compactTranscript,
   isMeetingLink,
@@ -53,17 +53,18 @@ describe("meeting links", () => {
 });
 
 describe("session marker in the transcript title", () => {
-  it("round-trips the first 8 characters of the session id", () => {
+  it("round-trips the full session id", () => {
     const title = transcriptTitle({ name: "Rewards demo", clientName: "Acme" }, SESSION);
     expect(title).toBe(`Acme · Rewards demo · NUPI demo ${sessionTag(SESSION)}`);
-    expect(tagFromTitle(title)).toBe("1a2b3c4d");
+    expect(tagFromTitle(title)).toBe(SESSION);
     expect(tagFromTitle("Weekly sync")).toBeNull();
+    expect(tagFromTitle("Old style [sdr:1a2b3c4d]")).toBeNull();
   });
 
   it("stays within the 256-character limit and keeps the marker", () => {
     const title = transcriptTitle({ name: "x".repeat(300), clientName: "y".repeat(300) }, SESSION);
     expect(title.length).toBeLessThanOrEqual(256);
-    expect(tagFromTitle(title)).toBe("1a2b3c4d");
+    expect(tagFromTitle(title)).toBe(SESSION);
   });
 });
 
@@ -102,7 +103,7 @@ describe("transcript from the notetaker", () => {
   it("is kept compact: ordered sentences, speakers, summary parts (Hindi text kept as is)", () => {
     const t = compactTranscript({
       id: "T1",
-      title: "Acme · NUPI demo [sdr:1a2b3c4d]",
+      title: `Acme · NUPI demo [sdr:${SESSION}]`,
       date: 1764000000000,
       duration: 32.46,
       meeting_link: "https://meet.google.com/abc-defg-hij",
@@ -150,7 +151,9 @@ describe("Fireflies client (fetch stubbed)", () => {
     vi.stubGlobal("fetch", reply(200, { errors: [{ message: "bad", extensions: { code: "unsupported_platform" } }] }));
     await expect(addToLiveMeeting({ meetingLink: "https://x", title: "T", language: "en", durationMin: 60 })).rejects.toMatchObject({ statusCode: 400 });
     vi.stubGlobal("fetch", reply(401, { errors: [{ message: "Invalid API key" }] }));
-    await expect(getTranscript("T1")).rejects.toMatchObject({ statusCode: 502, message: expect.stringContaining("FIREFLIES_API_KEY") });
+    const refused = await getTranscript("T1").catch((e) => e);
+    expect(refused).toMatchObject({ statusCode: 502, message: expect.stringContaining("FIREFLIES_API_KEY") });
+    expect(refused).toBeInstanceOf(NotetakerConfigError); // the worker does not retry these
     vi.stubGlobal("fetch", reply(200, { data: { transcript: null } }));
     await expect(getTranscript("T1")).rejects.toMatchObject({ statusCode: 404 });
     vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("ECONNREFUSED"))));

@@ -40,11 +40,12 @@ export const normalizeMeetingLink = (link: string | null | undefined) => {
 };
 
 /**
- * Our marker in the transcript title, so a transcript finds its session even if the meeting
- * link was written differently: "[sdr:1a2b3c4d]" = the first 8 characters of the session id.
+ * Our marker in the transcript title, so a transcript finds exactly its session:
+ * "[sdr:<session id>]" (the full id, so two sessions can never share a marker).
  */
-export const sessionTag = (sessionId: string) => `[sdr:${sessionId.slice(0, 8).toLowerCase()}]`;
-export const tagFromTitle = (title: string | null | undefined) => /\[sdr:([0-9a-f]{8})\]/i.exec(title ?? "")?.[1]?.toLowerCase() ?? null;
+export const sessionTag = (sessionId: string) => `[sdr:${sessionId.toLowerCase()}]`;
+export const tagFromTitle = (title: string | null | undefined) =>
+  /\[sdr:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/i.exec(title ?? "")?.[1]?.toLowerCase() ?? null;
 
 export const transcriptTitle = (demo: { name: string; clientName: string }, sessionId: string) => {
   const who = demo.clientName ? `${demo.clientName} · ${demo.name}` : demo.name;

@@ -41,10 +41,11 @@ export const startBoss = async (role: "api" | "worker") => {
     expireInSeconds: 4 * 60 * 60 // long transcodes
   });
   await instance.createQueue(QUEUES.maintenance, { name: QUEUES.maintenance, retryLimit: 1, expireInSeconds: 60 * 60 });
-  // The notetaker can be a little behind its own webhook: retry for about an hour.
+  // The notetaker can be a little behind its own webhook: retry for about an hour
+  // (backoff from 60 s: 1 + 2 + 4 + 8 + 16 + 32 min ≈ 63 min).
   await instance.createQueue(QUEUES.transcriptFetch, {
     name: QUEUES.transcriptFetch,
-    retryLimit: 5,
+    retryLimit: 6,
     retryDelay: 60,
     retryBackoff: true,
     expireInSeconds: 10 * 60

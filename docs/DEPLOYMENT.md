@@ -160,7 +160,7 @@ docker compose up -d                 # recreates api + worker
 |---|---|
 | `curl https://<host>/sales-demo/health` | `{"status":"UP"}` |
 | `https://<host>/sales-demo/api-docs` (QA) | Swagger page |
-| `docker compose logs worker` | `Worker ready (1 video job(s) at a time, production)` |
+| `docker compose logs worker` | `Worker ready (1 video job(s) at a time, transcripts on, production)` (`off` when `FIREFLIES_API_KEY` is empty) |
 | Upload a short video in the app | The status goes uploading → processing → ready |
 | Open a demo console and its `/watch/<slug>` link on another network (phone hotspot) | The viewer follows the console within about 1 s |
 | Transcription: go live, paste the Teams/Meet link, "Invite notetaker", admit it in the call, end the call | Live history shows "Transcript processing", then the summary and transcript a few minutes after the call |

@@ -20,7 +20,7 @@ app.disable("x-powered-by");
 
 // Notetaker webhook: needs the exact raw body to check its signature, so it is mounted before
 // the JSON parser. Server-to-server (no CORS, no team key; the signature is the check).
-app.post("/api/webhooks/fireflies", publicRateLimit, express.raw({ type: "*/*", limit: "100kb" }), firefliesWebhookHandler);
+app.post("/api/webhooks/fireflies", morganMiddleware(), publicRateLimit, express.raw({ type: "*/*", limit: "100kb" }), firefliesWebhookHandler);
 
 // MIDDLEWARE
 app.use(express.json({ limit: "1mb" }));

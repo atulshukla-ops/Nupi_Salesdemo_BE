@@ -23,5 +23,14 @@ export const closeStaleSessions = async () => {
   return result.affected ?? 0;
 };
 
+/** Newest 50 runs. The transcript text is not loaded here (it can be megabytes per session). */
 export const listSessions = (demoId: string) =>
-  DemoSession.find({ where: { demoId }, order: { startedAt: "DESC" }, take: 50 });
+  DemoSession.find({
+    where: { demoId },
+    order: { startedAt: "DESC" },
+    take: 50,
+    select: [
+      "id", "demoId", "presenterName", "startedAt", "endedAt", "peakViewers", "viewers", "meetingLink",
+      "transcriptStatus", "transcriptLanguage", "transcriptRequestedAt", "transcriptVendorId", "transcriptReadyAt", "transcriptError"
+    ]
+  });

@@ -3,7 +3,8 @@ import AppDataSource from "./configs/database";
 import env from "./configs/env";
 import { QUEUES, startBoss, stopBoss } from "./jobs/boss";
 import { runMaintenance } from "./services/maintenance.service";
-import { fetchAndSaveTranscript } from "./services/transcript.service";
+import { NotetakerConfigError, transcriptionEnabled } from "./services/fireflies.client";
+import { fetchAndSaveTranscript, markTranscriptFailed } from "./services/transcript.service";
 import AppError from "./utils/appError";
 import { markProcessingFailed, processVideo } from "./services/videoProcessing.service";
 import { PermanentVideoError } from "./utils/ffmpeg";
@@ -51,15 +52,19 @@ const start = async () => {
     );
   }
 
-  // Finished meeting transcripts (queued by the notetaker's webhook).
-  await boss.work<{ meetingId: string }>(QUEUES.transcriptFetch, { includeMetadata: true, batchSize: 1, pollingIntervalSeconds: 5 }, async ([job]) => {
+  // Finished meeting transcripts (queued by the notetaker's webhook). Only a worker that has the
+  // Fireflies key takes these jobs: one without it (e.g. a developer's local worker on the same
+  // database) would otherwise grab them and fail them.
+  if (transcriptionEnabled()) await boss.work<{ meetingId: string }>(QUEUES.transcriptFetch, { includeMetadata: true, batchSize: 1, pollingIntervalSeconds: 5 }, async ([job]) => {
     try {
       await fetchAndSaveTranscript(job.data.meetingId);
     } catch (error) {
-      const status = error instanceof AppError ? error.statusCode : 500;
-      // A missing key or a bad request will not fix itself; anything else (busy, not ready yet, network) is retried.
-      if (status === 400 || status === 503) {
-        logger.error(`Transcript ${job.data.meetingId} could not be fetched: ${(error as Error).message}`);
+      // Settings problems (key missing / refused) and bad requests will not fix themselves;
+      // anything else (busy, not ready yet, network) is retried for about an hour.
+      const permanent = error instanceof NotetakerConfigError || (error instanceof AppError && error.statusCode === 400);
+      if (permanent || job.retryCount >= job.retryLimit) {
+        const marked = await markTranscriptFailed(job.data.meetingId, error).catch(() => 0);
+        logger.error(`Transcript ${job.data.meetingId} could not be fetched (${marked} session(s) marked failed): ${(error as Error).message}`);
         return;
       }
       logger.warn(`Transcript ${job.data.meetingId} attempt ${job.retryCount + 1} failed, will retry: ${(error as Error).message}`);
@@ -73,7 +78,7 @@ const start = async () => {
   // Every night at 02:00 India time, like be-admin-portal's crons.
   await boss.schedule(QUEUES.maintenance, "0 2 * * *", {}, { tz: "Asia/Kolkata" });
 
-  logger.info(`Worker ready (${concurrency} video job(s) at a time, ${env.nodeEnv})`);
+  logger.info(`Worker ready (${concurrency} video job(s) at a time, transcripts ${transcriptionEnabled() ? "on" : "off"}, ${env.nodeEnv})`);
 };
 
 const shutdown = async (signal: string) => {
