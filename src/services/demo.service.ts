@@ -2,6 +2,7 @@ import { IsNull, Not } from "typeorm";
 import env from "../configs/env";
 import { issueHostToken } from "../sync/hostToken";
 import { listSessions } from "../sync/sessions";
+import { loadTranscriptHeads, transcriptSummaryJSON } from "./transcript.service";
 import { DEFAULT_OPTIONS, DEFAULT_WELCOME, DemoOptions, DemoWelcome, RunOfShow } from "../constants/types";
 import { Demo } from "../entities/demo.entity";
 import AppError from "../utils/appError";
@@ -27,7 +28,8 @@ export const demoToJSON = (d: Demo) => ({
   updatedBy: d.updatedBy,
   createdAt: d.createdAt,
   updatedAt: d.updatedAt,
-  lastLiveAt: d.lastLiveAt
+  lastLiveAt: d.lastLiveAt,
+  meetingLink: d.meetingLink
 });
 
 export const flowToJSON = (f: Demo) => ({
@@ -137,12 +139,13 @@ export const createDemo = async (
 /** Changing the date or client does NOT change the slug: the invite link may already be shared. */
 export const updateDemo = async (
   id: string,
-  patch: Partial<{ name: string; clientName: string; date: string; welcome: DemoWelcome; options: DemoOptions; runOfShow: RunOfShow }>,
+  patch: Partial<{ name: string; clientName: string; date: string; welcome: DemoWelcome; options: DemoOptions; runOfShow: RunOfShow; meetingLink: string | null }>,
   by: string | null
 ) => {
   const demo = await findLive(id, false);
-  const { date, ...rest } = patch;
+  const { date, meetingLink, ...rest } = patch;
   Object.assign(demo, rest, { updatedBy: by });
+  if (meetingLink !== undefined) demo.meetingLink = meetingLink || null;
   if (date) demo.demoDate = date;
   return demo.save();
 };
@@ -287,13 +290,17 @@ export const issueLiveToken = async (id: string, by: string | null) => {
 
 export const getDemoSessions = async (id: string) => {
   await findLive(id, false);
-  return (await listSessions(id)).map((s) => ({
+  const sessions = await listSessions(id);
+  const heads = await loadTranscriptHeads(sessions.filter((s) => s.transcriptVendorId).map((s) => s.id));
+  return sessions.map((s) => ({
     id: s.id,
     presenterName: s.presenterName,
     startedAt: s.startedAt,
     endedAt: s.endedAt,
     peakViewers: s.peakViewers,
-    viewers: s.viewers
+    viewers: s.viewers,
+    meetingLink: s.meetingLink,
+    transcript: transcriptSummaryJSON(s, heads.get(s.id) ?? null)
   }));
 };
 

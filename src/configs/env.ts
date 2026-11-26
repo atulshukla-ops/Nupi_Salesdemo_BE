@@ -71,6 +71,14 @@ export default {
   syncMaxViewers: num(process.env.SYNC_MAX_VIEWERS, 50),
   hostTokenTtlSec: num(process.env.HOST_TOKEN_TTL_SEC, 12 * 60 * 60),
 
+  // meeting transcription (Fireflies.ai notetaker). Off while FIREFLIES_API_KEY is empty.
+  firefliesApiKey: process.env.FIREFLIES_API_KEY || "",
+  /** Signing secret of the Fireflies webhook (Webhooks V2). Webhooks are refused without it. */
+  firefliesWebhookSecret: process.env.FIREFLIES_WEBHOOK_SECRET || "",
+  firefliesApiUrl: process.env.FIREFLIES_API_URL || "https://api.fireflies.ai/graphql",
+  /** A requested transcript that has not arrived after this many hours is shown as "not available". */
+  transcriptWaitHours: num(process.env.TRANSCRIPT_WAIT_HOURS, 24),
+
   // housekeeping
   trashRetentionDays: num(process.env.TRASH_RETENTION_DAYS, 30),
   uploadAbandonHours: num(process.env.UPLOAD_ABANDON_HOURS, 24),

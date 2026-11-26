@@ -1,4 +1,5 @@
 import Joi from "joi";
+import { isMeetingLink } from "../utils/transcript";
 import { isoDate, uuid } from "./common.validator";
 
 export const runOfShowSchema = Joi.array()
@@ -28,6 +29,14 @@ export const optionsSchema = Joi.object({
 });
 
 const demoName = Joi.string().trim().min(1).max(120);
+
+/** A Microsoft Teams or Google Meet link (https). */
+export const meetingLink = () =>
+  Joi.string()
+    .trim()
+    .max(500)
+    .custom((value: string, helpers) => (isMeetingLink(value) ? value : helpers.error("any.invalid")))
+    .messages({ "any.invalid": "Paste a Microsoft Teams or Google Meet link (https://…)" });
 const clientName = Joi.string().trim().allow("").max(120);
 
 export const listQuerySchema = Joi.object({
@@ -51,10 +60,24 @@ export const updateDemoSchema = Joi.object({
   date: isoDate(),
   welcome: welcomeSchema,
   options: optionsSchema,
-  runOfShow: runOfShowSchema
+  runOfShow: runOfShowSchema,
+  /** "" or null clears it. */
+  meetingLink: meetingLink().allow("", null)
 })
   .min(1)
   .messages({ "object.min": "Nothing to update" });
+
+// ---- meeting transcription ----
+export const notetakerSchema = Joi.object({
+  meetingLink: meetingLink().required(),
+  /** What the call is in: English or Hindi (mixed Hindi-English calls: pick the main one). */
+  language: Joi.string().valid("en", "hi").default("en").messages({ "any.only": "language must be en (English) or hi (Hindi)" })
+});
+
+export const sessionParamsSchema = Joi.object({
+  id: uuid().required().messages({ "string.guid": "id must be a valid id" }),
+  sessionId: uuid().required().messages({ "string.guid": "sessionId must be a valid id" })
+});
 
 export const saveAsFlowSchema = Joi.object({
   name: demoName.required(),

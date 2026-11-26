@@ -5,7 +5,9 @@ import helmet from "helmet";
 import swaggerUi from "swagger-ui-express";
 import env from "./configs/env";
 import { openApiDocument } from "./docs/openapi";
+import { firefliesWebhookHandler } from "./controllers/demo.controller";
 import { morganMiddleware } from "./middlewares/morgan";
+import { publicRateLimit } from "./middlewares/rateLimit";
 import indexRoute from "./routes/index";
 import AppError from "./utils/appError";
 import logger from "./utils/logger";
@@ -15,6 +17,10 @@ const app = express();
 // Behind nginx / a load balancer: use the real client address (rate limits, logs).
 if (env.trustProxyHops > 0) app.set("trust proxy", env.trustProxyHops);
 app.disable("x-powered-by");
+
+// Notetaker webhook: needs the exact raw body to check its signature, so it is mounted before
+// the JSON parser. Server-to-server (no CORS, no team key; the signature is the check).
+app.post("/api/webhooks/fireflies", morganMiddleware(), publicRateLimit, express.raw({ type: "*/*", limit: "100kb" }), firefliesWebhookHandler);
 
 // MIDDLEWARE
 app.use(express.json({ limit: "1mb" }));

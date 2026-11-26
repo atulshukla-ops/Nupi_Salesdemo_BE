@@ -94,6 +94,8 @@ curl http://localhost:8130/health  # {"status":"UP",...}
 | `CLOUDFRONT_DOMAIN` / `CLOUDFRONT_KEY_PAIR_ID` / `CLOUDFRONT_PRIVATE_KEY` | `dxxxx.cloudfront.net` / `K2…` / PEM | Set all three for CloudFront playback links, or none (then S3 presigned links are used). Write the PEM on one line with `\n` for line breaks. **Use CloudFront in production:** S3 presigned links signed with an IAM role only last until the role's credentials rotate (a few hours). The domain must be the bare host name, without a path. |
 | `S3_ENDPOINT` | *(empty)* | Only for an S3-compatible test server; leave empty on AWS |
 | `WORKER_CONCURRENCY` | `1` | Videos converted at the same time |
+| `FIREFLIES_API_KEY` | from Fireflies → Settings → Developer settings | Meeting transcription. Empty = switched off (the console says so). The key stays on the server. |
+| `FIREFLIES_WEBHOOK_SECRET` | signing secret you set in Fireflies | Create a **Webhooks V2** webhook at app.fireflies.ai/integrations/api/webhook: URL `https://<host>/sales-demo/api/webhooks/fireflies`, events `meeting.transcribed` and `meeting.summarized`. Webhooks are refused without this secret. The URL must be public HTTPS. |
 
 Generate the secrets with `openssl rand -base64 36`.
 
@@ -158,9 +160,10 @@ docker compose up -d                 # recreates api + worker
 |---|---|
 | `curl https://<host>/sales-demo/health` | `{"status":"UP"}` |
 | `https://<host>/sales-demo/api-docs` (QA) | Swagger page |
-| `docker compose logs worker` | `Worker ready (1 video job(s) at a time, production)` |
+| `docker compose logs worker` | `Worker ready (1 video job(s) at a time, transcripts on, production)` (`off` when `FIREFLIES_API_KEY` is empty) |
 | Upload a short video in the app | The status goes uploading → processing → ready |
 | Open a demo console and its `/watch/<slug>` link on another network (phone hotspot) | The viewer follows the console within about 1 s |
+| Transcription: go live, paste the Teams/Meet link, "Invite notetaker", admit it in the call, end the call | Live history shows "Transcript processing", then the summary and transcript a few minutes after the call |
 
 ---
 

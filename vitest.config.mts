@@ -21,7 +21,11 @@ export default defineConfig({
       UPLOAD_PART_BYTES: String(1024 * 1024),
       API_DOCS: "true",
       DB_NAME: "not_used_by_tests",
-      DB_USERNAME: "not_used_by_tests"
+      DB_USERNAME: "not_used_by_tests",
+      // The notetaker API is never called for real: tests stub fetch.
+      FIREFLIES_API_KEY: "test-fireflies-key",
+      FIREFLIES_WEBHOOK_SECRET: "test-fireflies-secret",
+      FIREFLIES_API_URL: "http://fireflies.test/graphql"
     }
   }
 });

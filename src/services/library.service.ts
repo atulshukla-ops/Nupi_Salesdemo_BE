@@ -1,3 +1,4 @@
+import { transcriptionEnabled } from "./fireflies.client";
 import { IsNull, Not } from "typeorm";
 import env from "../configs/env";
 import { Asset } from "../entities/asset.entity";
@@ -19,7 +20,9 @@ export const getBootstrap = async () => {
     assets: await assetsWithUrls(assets),
     flows: flows.map(flowToJSON),
     /** Upload limits, so the browser checks the same numbers as the server. */
-    limits: { videoBytes: env.maxUploadBytes, deckBytes: env.maxDeckBytes }
+    limits: { videoBytes: env.maxUploadBytes, deckBytes: env.maxDeckBytes },
+    /** What this server has switched on. Transcription needs a Fireflies API key. */
+    features: { transcription: transcriptionEnabled() }
   };
 };
 
