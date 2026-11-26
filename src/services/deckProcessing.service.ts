@@ -5,7 +5,8 @@ import { PendingUpload } from "../constants/types";
 import { Asset } from "../entities/asset.entity";
 import { deckKeys, storage, versionPrefix } from "../storage";
 import logger from "../utils/logger";
-import { officeToPdf, pdfToSlides } from "../utils/slides";
+import { PermanentVideoError } from "../utils/ffmpeg";
+import { DECK_MIME, officeToPdf, pdfToSlides, readDeckFormat } from "../utils/slides";
 
 /**
  * Turns an uploaded deck into what viewers see:
@@ -21,8 +22,18 @@ export const processDeck = async (asset: Asset, pending: PendingUpload, version:
     const original = path.join(work, path.basename(pending.objectKey));
     await storage().downloadToFile(pending.objectKey, original);
 
-    const isPdf = pending.mimeType === "application/pdf" || /\.pdf$/i.test(original);
-    const pdf = isPdf ? original : await officeToPdf(original, work);
+    // Trust the file's content, not its name: a renamed file must not slip through.
+    const format = await readDeckFormat(original);
+    if (format === "encrypted") throw new PermanentVideoError("This presentation is password-protected. Remove the password in PowerPoint and upload it again.");
+    if (!format) throw new PermanentVideoError("This file is not a PowerPoint (PPTX/PPT) or PDF file. Open it in PowerPoint and save it again, or upload a PDF.");
+    let pdf = original;
+    if (format !== "pdf") {
+      // A neutral name with the right extension (the stored name follows the browser's claim,
+      // e.g. a PPTX renamed to .pdf would otherwise be "original.pdf", the output's own name).
+      const input = path.join(work, `deck.${format}`);
+      await fs.rename(original, input);
+      pdf = await officeToPdf(input, work);
+    }
     const slides = await pdfToSlides(pdf, path.join(work, "slides"));
 
     const keys = deckKeys(asset.id, version);
@@ -62,7 +73,7 @@ export const processDeck = async (asset: Asset, pending: PendingUpload, version:
       playbackKey: keys.slidesPrefix,
       thumbnailKey: keys.thumbnail,
       originalFileName: pending.fileName,
-      mimeType: pending.mimeType,
+      mimeType: DECK_MIME[format], // what the file really is
       sizeBytes: pending.sizeBytes,
       durationSec: null,
       width: slides.width,

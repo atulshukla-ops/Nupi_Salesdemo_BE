@@ -4,7 +4,7 @@ import path from "path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PermanentVideoError } from "../../src/utils/ffmpeg";
 import { createRequire } from "module";
-import { MAX_PAGE_RATIO, MAX_SLIDE_HEIGHT, MAX_SLIDES, officeToPdf, pdfToSlides, SLIDE_WIDTH } from "../../src/utils/slides";
+import { MAX_PAGE_RATIO, MAX_SLIDE_HEIGHT, MAX_SLIDES, officeToPdf, pdfToSlides, readDeckFormat, sniffDeck, SLIDE_WIDTH } from "../../src/utils/slides";
 import { makePdf } from "../fixtures/makePdf";
 
 /** Deck conversion used by the worker, on small generated PDFs. */
@@ -59,6 +59,31 @@ describe("deck conversion", () => {
 
   it(`refuses decks with more than ${MAX_SLIDES} slides`, async () => {
     await expect(pdfToSlides(file("huge.pdf"), file("out-huge"))).rejects.toThrow(/at most 300 slides/);
+  });
+
+  it("recognises decks by their content, not their name", async () => {
+    const zip = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0, 6, 0]);
+    const ole = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+    const u16 = (t: string) => Buffer.from(t, "utf16le");
+    // PDF: header at the start, or a few bytes in (allowed by the PDF format)
+    expect(sniffDeck(Buffer.from("%PDF-1.7 "))).toBe("pdf");
+    expect(sniffDeck(Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from("  %PDF-1.4")]))).toBe("pdf");
+    expect(sniffDeck(Buffer.concat([Buffer.alloc(2000, 0x20), Buffer.from("%PDF-1.4")]))).toBeNull();
+    // PPTX: a ZIP holding ppt/presentation.xml; a Word/Excel/plain ZIP is not a deck
+    expect(sniffDeck(zip, Buffer.from("...ppt/presentation.xml..."))).toBe("pptx");
+    expect(sniffDeck(zip, Buffer.from("...word/document.xml..."))).toBeNull();
+    // PPT: an OLE file with a "PowerPoint Document" part; a Word .doc is not; encrypted = password
+    expect(sniffDeck(ole, Buffer.concat([ole, u16("PowerPoint Document")]))).toBe("ppt");
+    expect(sniffDeck(ole, Buffer.concat([ole, u16("WordDocument")]))).toBeNull();
+    expect(sniffDeck(ole, Buffer.concat([ole, u16("EncryptedPackage")]))).toBe("encrypted");
+    // junk
+    expect(sniffDeck(Buffer.from("not really a presentation"))).toBeNull();
+    expect(sniffDeck(Buffer.alloc(0))).toBeNull();
+    // readDeckFormat reads the right parts of a real file
+    await fs.writeFile(file("real-ish.pptx"), Buffer.concat([zip, Buffer.alloc(5000), Buffer.from("ppt/presentation.xml")]));
+    expect(await readDeckFormat(file("real-ish.pptx"))).toBe("pptx");
+    await fs.writeFile(file("renamed.pptx"), "not really a presentation");
+    expect(await readDeckFormat(file("renamed.pptx"))).toBeNull();
   });
 
   it("PowerPoint without LibreOffice: clear message to upload a PDF instead", async () => {
