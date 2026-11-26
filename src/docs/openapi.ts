@@ -8,6 +8,7 @@ import {
   createFlowSchema,
   demoFromFlowSchema,
   listQuerySchema,
+  notetakerSchema,
   saveAsFlowSchema,
   updateDemoSchema,
   updateFlowSchema
@@ -92,7 +93,27 @@ const ops: Op[] = [
     summary: "Host token for the live console",
     notes: "Returns { token, expiresAt, slug, syncUrl }. Open `syncUrl?slug=…&role=host&token=…` as a WebSocket (add `&takeover=1` to take over from another console)."
   },
-  { method: "get", path: "/demos/{id}/sessions", tag: "Live", summary: "Past live sessions: presenter, start/end, viewers by name, peak viewers" },
+  { method: "get", path: "/demos/{id}/sessions", tag: "Live", summary: "Past live sessions: presenter, start/end, viewers by name, peak viewers, transcript summary" },
+
+  // meeting transcription (Fireflies.ai notetaker)
+  {
+    method: "post",
+    path: "/demos/{id}/notetaker",
+    tag: "Transcription",
+    summary: "Send the notetaker into the Teams / Meet call of the live session",
+    body: notetakerSchema,
+    notes: "The demo must be live (console open). 409 if not; 429 if the notetaker service is rate-limited; 503 if FIREFLIES_API_KEY is not set."
+  },
+  { method: "get", path: "/demos/{id}/sessions/{sessionId}/transcript", tag: "Transcription", summary: "Full transcript of a session: summary, action items, speakers, sentences" },
+  { method: "post", path: "/demos/{id}/sessions/{sessionId}/transcript/refetch", tag: "Transcription", summary: "Fetch again from the notetaker (if its webhook was late or missed)" },
+  {
+    method: "post",
+    path: "/webhooks/fireflies",
+    tag: "Transcription",
+    summary: "Webhook called by Fireflies when a transcript is ready",
+    open: true,
+    notes: "No team key. Signed: `X-Hub-Signature: sha256=<HMAC-SHA256 of the raw body with FIREFLIES_WEBHOOK_SECRET>`. Body (Webhooks V2): `{ event, meeting_id, timestamp }`."
+  },
 
   // flows
   { method: "get", path: "/flows", tag: "Standard Flows", summary: "Standard Flows (templates)" },

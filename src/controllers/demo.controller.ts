@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { getSessionTranscript, handleWebhook, inviteNotetaker, refetchTranscript } from "../services/transcript.service";
 import {
   createDemo,
   createDemoFromFlow,
@@ -72,6 +73,28 @@ export const liveTokenHandler = asyncHandler(async (req: Request, res: Response)
 
 export const demoSessionsHandler = asyncHandler(async (req: Request, res: Response) => {
   successCallback(res, "success", "DemoSessions", "Live sessions loaded", await getDemoSessions(req.params.id));
+});
+
+// ---------- meeting transcription ----------
+
+export const inviteNotetakerHandler = asyncHandler(async (req: Request, res: Response) => {
+  successCallback(res, "success", "DemoNotetaker", "The notetaker is joining the call", await inviteNotetaker(req.params.id, req.body));
+});
+
+export const sessionTranscriptHandler = asyncHandler(async (req: Request, res: Response) => {
+  successCallback(res, "success", "SessionTranscript", "Transcript loaded", await getSessionTranscript(req.params.id, req.params.sessionId));
+});
+
+export const refetchTranscriptHandler = asyncHandler(async (req: Request, res: Response) => {
+  const r = await refetchTranscript(req.params.id, req.params.sessionId);
+  successCallback(res, "success", "SessionTranscriptRefetch", r.found ? "Transcript updated" : "The transcript is not ready yet", r);
+});
+
+/** POST /api/webhooks/fireflies: called by Fireflies, signed with the webhook secret (no team key). */
+export const firefliesWebhookHandler = asyncHandler(async (req: Request, res: Response) => {
+  const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+  const r = await handleWebhook(raw, req.get("x-hub-signature") ?? undefined);
+  res.status(200).json({ received: true, ...r });
 });
 
 // ---------- standard flows ----------

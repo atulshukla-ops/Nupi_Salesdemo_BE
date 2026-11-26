@@ -8,7 +8,8 @@ import logger from "../utils/logger";
  */
 export const QUEUES = {
   videoProcess: "video-process",
-  maintenance: "maintenance-cleanup"
+  maintenance: "maintenance-cleanup",
+  transcriptFetch: "transcript-fetch"
 } as const;
 
 let boss: PgBoss | null = null;
@@ -40,6 +41,14 @@ export const startBoss = async (role: "api" | "worker") => {
     expireInSeconds: 4 * 60 * 60 // long transcodes
   });
   await instance.createQueue(QUEUES.maintenance, { name: QUEUES.maintenance, retryLimit: 1, expireInSeconds: 60 * 60 });
+  // The notetaker can be a little behind its own webhook: retry for about an hour.
+  await instance.createQueue(QUEUES.transcriptFetch, {
+    name: QUEUES.transcriptFetch,
+    retryLimit: 5,
+    retryDelay: 60,
+    retryBackoff: true,
+    expireInSeconds: 10 * 60
+  });
   boss = instance;
   logger.info(`Job queue started (${role})`);
   return boss;
@@ -54,6 +63,10 @@ export const stopBoss = async () => {
   if (boss) await boss.stop({ graceful: true, timeout: 30_000 });
   boss = null;
 };
+
+/** Queues fetching a finished meeting transcript (from the notetaker's webhook). */
+export const enqueueTranscriptFetch = (meetingId: string, event: string) =>
+  getBoss().send(QUEUES.transcriptFetch, { meetingId }, { singletonKey: `${meetingId}:${event}` });
 
 /** Queues processing of one uploaded file version. The singleton key prevents duplicate jobs. */
 export const enqueueVideoProcessing = (assetId: string, version: number) =>

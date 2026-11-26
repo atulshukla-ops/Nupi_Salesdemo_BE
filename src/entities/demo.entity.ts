@@ -62,6 +62,10 @@ export class Demo extends BaseEntity {
   @UpdateDateColumn({ name: "UpdatedAt", type: "timestamptz" })
   updatedAt: Date;
 
+  /** Client demos: the Teams / Google Meet link of the call, for the notetaker. */
+  @Column({ name: "MeetingLink", type: "varchar", length: 500, nullable: true })
+  meetingLink: string | null;
+
   @Column({ name: "LastLiveAt", type: "timestamptz", nullable: true })
   lastLiveAt: Date | null;
 

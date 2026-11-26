@@ -3,6 +3,8 @@ import AppDataSource from "./configs/database";
 import env from "./configs/env";
 import { QUEUES, startBoss, stopBoss } from "./jobs/boss";
 import { runMaintenance } from "./services/maintenance.service";
+import { fetchAndSaveTranscript } from "./services/transcript.service";
+import AppError from "./utils/appError";
 import { markProcessingFailed, processVideo } from "./services/videoProcessing.service";
 import { PermanentVideoError } from "./utils/ffmpeg";
 import logger from "./utils/logger";
@@ -48,6 +50,22 @@ const start = async () => {
       async ([job]) => handleVideoJob(job)
     );
   }
+
+  // Finished meeting transcripts (queued by the notetaker's webhook).
+  await boss.work<{ meetingId: string }>(QUEUES.transcriptFetch, { includeMetadata: true, batchSize: 1, pollingIntervalSeconds: 5 }, async ([job]) => {
+    try {
+      await fetchAndSaveTranscript(job.data.meetingId);
+    } catch (error) {
+      const status = error instanceof AppError ? error.statusCode : 500;
+      // A missing key or a bad request will not fix itself; anything else (busy, not ready yet, network) is retried.
+      if (status === 400 || status === 503) {
+        logger.error(`Transcript ${job.data.meetingId} could not be fetched: ${(error as Error).message}`);
+        return;
+      }
+      logger.warn(`Transcript ${job.data.meetingId} attempt ${job.retryCount + 1} failed, will retry: ${(error as Error).message}`);
+      throw error;
+    }
+  });
 
   await boss.work(QUEUES.maintenance, { batchSize: 1 }, async () => {
     await runMaintenance();
